@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+job_alerts.egg-info/PKG-INFO
+job_alerts.egg-info/SOURCES.txt
+job_alerts.egg-info/dependency_links.txt
+job_alerts.egg-info/requires.txt
+job_alerts.egg-info/top_level.txt

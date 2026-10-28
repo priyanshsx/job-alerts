@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: job-alerts
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: python-dotenv
+Requires-Dist: pyyaml
+Requires-Dist: pydantic
+Requires-Dist: httpx
+Requires-Dist: anthropic
