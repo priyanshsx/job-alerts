@@ -5,3 +5,5 @@ config/clients/
 data/ 
 
 outputs/
+
+.venv
