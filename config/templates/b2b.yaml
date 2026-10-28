@@ -1,0 +1,8 @@
+template: b2b 
+
+llm: 
+  max_items_per_run: 200
+
+job_alerts: 
+  lookback_days: 2
+  min_priority: 2
