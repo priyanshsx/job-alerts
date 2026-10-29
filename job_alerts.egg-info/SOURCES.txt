@@ -1,8 +1,10 @@
 README.md
 pyproject.toml
 job_alerts/__init__.py
+job_alerts/__main__.py
 job_alerts/classify.py
 job_alerts/cli.py
+job_alerts/collect.py
 job_alerts/digest.py
 job_alerts/enrich.py
 job_alerts.egg-info/PKG-INFO

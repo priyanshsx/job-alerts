@@ -2,4 +2,4 @@ python-dotenv
 pyyaml
 pydantic
 httpx
-anthropic
+openai

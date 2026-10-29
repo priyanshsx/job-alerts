@@ -6,4 +6,4 @@ Requires-Dist: python-dotenv
 Requires-Dist: pyyaml
 Requires-Dist: pydantic
 Requires-Dist: httpx
-Requires-Dist: anthropic
+Requires-Dist: openai
