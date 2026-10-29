@@ -21,7 +21,7 @@ EMPLOYER_LABELS = {
     "consultancy": "Consultancy", 
     "other_industry": "Mid-sized company, other industry",
     "unknown": "Company not recognized",
-    "large_enterprise": "Large enterrise"
+    "large_enterprise": "Large enterprise"
 }
 #--------------------------------------------------------------#
 
