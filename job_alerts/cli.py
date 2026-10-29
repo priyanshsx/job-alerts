@@ -4,6 +4,7 @@
 # Imports Libraries 
 import argparse 
 from job_alerts.collect import collect 
+from job_alerts.classify import classify
 #--------------------------------------------------------------#
 
 def main():
@@ -11,10 +12,14 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     fetch_cmd = sub.add_parser("fetch", help="fetch and store new job postings")
     fetch_cmd.add_argument("--client", required=True)
+    classify_cmd = sub.add_parser("classify", help="classify new job postings with the llm")
+    classify_cmd.add_argument("--client", required=True)
     args = parser.parse_args()
 
     if args.command == "fetch":
         collect(args.client)
+    elif args.command == "classify":
+        classify(args.client)
 
 if __name__ == "__main__":
     main()

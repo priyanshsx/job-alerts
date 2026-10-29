@@ -4,7 +4,7 @@
 # Imports Libraries 
 from datetime import datetime, timezone 
 from job_alerts.core.config import load_config 
-from job_alerts.core.db import get_conn 
+from job_alerts.core.db import get_conn, get_client_id 
 from job_alerts.sources import ba_jobs 
 #--------------------------------------------------------------#
 
@@ -17,7 +17,7 @@ def collect(client: str) -> None:
     agencies = [x.lower() for x in cfg.listening.job_agency_names]
 
     conn = get_conn()
-    client_id = conn.execute("SELECT id FROM clients WHERE name = ?", (client,)).fetchone()["id"]
+    client_id = get_client_id(conn, client)
 
     fetched = new = 0
     for keyword in cfg.listening.job_keywords:
