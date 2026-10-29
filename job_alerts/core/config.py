@@ -12,7 +12,7 @@ class Loose(BaseModel):
 
 class TitleRule(Loose):
     match: list[str]
-    poiints: int 
+    points: int 
     persona: str 
 
 class CompanySize(Loose):
