@@ -14,7 +14,7 @@ def prioritize(client: str) -> None:
     conn = get_conn()
     client_id = get_client_id(conn, client)
     rows = conn.execute(
-        "SELECT id, employer_type, role_type FROM job_postings"
+        "SELECT id, employer_type, role_type FROM job_postings "
         "WHERE client_id = ? AND is_relevant = 1", 
         (client_id,),
     ).fetchall()
