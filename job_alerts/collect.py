@@ -27,7 +27,7 @@ def collect(client: str) -> None:
             cur = conn.execute(
                 """
                 INSERT INTO job_postings 
-                (client_id, source, external_id, url, title_company_name, 
+                (client_id, source, external_id, url, title, company_name, 
                 location, country, posted_at, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (client_id, source, external_id) DO NOTHING
