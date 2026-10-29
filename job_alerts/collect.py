@@ -13,6 +13,8 @@ def collect(client: str) -> None:
     cfg = load_config(client)
     days = cfg.job_alerts["lookback_days"]
     excludes = [x.lower() for x in cfg.listening.job_exclude_keywords]
+    must_contain = [x.lower() for x in cfg.listening.job_title_must_contain]
+    agencies = [x.lower() for x in cfg.listening.job_agency_names]
 
     conn = get_conn()
     client_id = conn.execute("SELECT id FROM clients WHERE name = ?", (client,)).fetchone()["id"]
@@ -22,7 +24,12 @@ def collect(client: str) -> None:
         for p in ba_jobs.fetch(keyword, days=days):
             fetched += 1
             title = (p["title"] or "").lower()
+            company = (p["company_name"] or "").lower()
             if any(x in title for x in excludes):
+                continue
+            if must_contain and not any(x in title for x in must_contain):
+                continue
+            if any(a in company for a in agencies):
                 continue
             cur = conn.execute(
                 """
