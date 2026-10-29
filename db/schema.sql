@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS job_postings (
     priority INTEGER,
     classified_at TEXT,
     created_at TEXT,
+    employer_type TEXT, 
+    reason TEXT,
     UNIQUE (client_id, source, external_id)
 );
 
