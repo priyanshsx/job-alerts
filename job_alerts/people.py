@@ -10,6 +10,7 @@ from job_alerts.core.db import get_conn, get_client_id
 from job_alerts.core.llm import call_llm
 from job_alerts.sources import xray_search
 from job_alerts.sources.xray_search import normalize_linkedin_url
+import random
 #--------------------------------------------------------------#
 
 # Global variables and classes
@@ -101,6 +102,7 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
     #--------------------------------------------------------------#
 
     # Company searches first (capped), then fill the rest of the run with region searches
+    random.shuffle(region_queries)
     company_queries = company_queries[: pf.get("max_company_searches", 10)]
     return (company_queries + region_queries)[: pf.get("max_searches_per_run", 30)]
 #--------------------------------------------------------------#
