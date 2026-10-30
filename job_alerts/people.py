@@ -13,7 +13,9 @@ from job_alerts.sources.xray_search import normalize_linkedin_url
 #--------------------------------------------------------------#
 
 # Global variables and classes
-COMPANY_TITLES = 2   # how many target titles to search for at each job alerts company
+COMPANY_TITLES = 2      # how many target titles to search for at each job alerts company
+BATCH_SIZE = 10         # search results sent to the LLM per call
+PARSE_MAX_TOKENS = 4000 # output limit for one parsing call
 
 class Person(BaseModel):
     url: str
@@ -46,6 +48,9 @@ PARSE_PROMPT = """
                 snippet shows the person works at a different company.
                 reason: one short sentence on why this person is worth connecting with, in English.
                 Keep each url exactly as given.
+
+                Return ONLY the people where is_match is true. Leave everyone else out.
+                If nobody matches, return an empty list.
 
                 Results: {results}
 """
@@ -136,40 +141,51 @@ def find_people(client: str) -> None:
             f"These results are for people at {company}, which recently posted a relevant job."
             if company else ""
         )
-        prompt = PARSE_PROMPT.format(
-            display_name=cfg.display_name,
-            titles=", ".join(pf["titles"]),
-            positioning=cfg.positioning.strip(),
-            company_context=company_context,
-            results="\n".join(
-                f"- url: {r['url']}\n  title: {r['title']}\n  snippet: {r['snippet']}" for r in fresh
-            ),
-        )
-        try:
-            parsed = call_llm("parse_people", prompt, ParsedResults, client_id)
-        except RuntimeError as e:
-            print(f"  {i}/{len(queries)}  parse failed: {query} ({e})")
-            continue
-
         fresh_urls = {r["url"] for r in fresh}
         matched = 0
-        for p in parsed.people:
-            url = normalize_linkedin_url(p.url)
-            if not p.is_match or url not in fresh_urls:   # ignore anything not in the actual results
-                continue
-            matched += 1
-            cur = conn.execute(
-                """INSERT INTO people (client_id, full_name, title, company_name, location,
-                   linkedin_url, source, query, reason, priority, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT (client_id, linkedin_url) DO NOTHING""",
-                (client_id, p.full_name, p.title, p.company or company, p.location, url,
-                 "job_alerts_company" if company else "title_search",
-                 query, p.reason, priority, _now().isoformat()),
+        failed_batches = 0
+        #--------------------------------------------------------------#
+
+        # Send the fresh results to the LLM in small batches, so answers never get cut off
+        for start in range(0, len(fresh), BATCH_SIZE):
+            batch = fresh[start:start + BATCH_SIZE]
+            prompt = PARSE_PROMPT.format(
+                display_name=cfg.display_name,
+                titles=", ".join(pf["titles"]),
+                positioning=cfg.positioning.strip(),
+                company_context=company_context,
+                results="\n".join(
+                    f"- url: {r['url']}\n  title: {r['title']}\n  snippet: {r['snippet']}" for r in batch
+                ),
             )
-            new += cur.rowcount
-        conn.commit()
-        print(f"  {i}/{len(queries)}  {len(fresh)} new profiles, {matched} matched, {new} added so far: {query}")
+            try:
+                parsed = call_llm("parse_people", prompt, ParsedResults, client_id,
+                                  max_tokens=PARSE_MAX_TOKENS)
+            except RuntimeError as e:
+                failed_batches += 1
+                print(f"  {i}/{len(queries)}  parse failed for one batch: {query} ({e})")
+                continue
+
+            for p in parsed.people:
+                url = normalize_linkedin_url(p.url)
+                if not p.is_match or url not in fresh_urls:   # ignore anything not in the actual results
+                    continue
+                matched += 1
+                cur = conn.execute(
+                    """INSERT INTO people (client_id, full_name, title, company_name, location,
+                       linkedin_url, source, query, reason, priority, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT (client_id, linkedin_url) DO NOTHING""",
+                    (client_id, p.full_name, p.title, p.company or company, p.location, url,
+                     "job_alerts_company" if company else "title_search",
+                     query, p.reason, priority, _now().isoformat()),
+                )
+                new += cur.rowcount
+            conn.commit()
+        #--------------------------------------------------------------#
+
+        print(f"  {i}/{len(queries)}  {len(fresh)} new profiles, {matched} matched, "
+              f"{new} added so far: {query}")
         time.sleep(1)
 
     conn.close()
