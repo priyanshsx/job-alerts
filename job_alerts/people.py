@@ -13,12 +13,12 @@ from job_alerts.sources.xray_search import normalize_linkedin_url
 #--------------------------------------------------------------#
 
 # Global variables and classes 
-SITE = "site:linkedin.com/in"
+SITE = ""
 
 class Person(BaseModel):
     url: str
-    full_name: str
-    title: str
+    full_name: str | None = None
+    title: str | None = None
     company: str | None = None
     location: str | None = None
     is_match: bool
@@ -69,13 +69,13 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
         ).fetchall()
         title_terms = " OR ".join(f'"{t}"' for t in titles)
         for row in companies:
-            queries.append((f'{SITE} "{row["company_name"]}" ({title_terms})', 1, row["company_name"]))
+            queries.append((f'{SITE} "{row["company_name"]}" ({title_terms})'.strip(), 1, row["company_name"]))
     #--------------------------------------------------------------#
 
     # 2. Titles × locations: broader reach
     for title in titles:
         for location in pf.get("locations", []):
-            queries.append((f'{SITE} "{title}" "{location}"', 2, None))
+            queries.append((f'{SITE} "{title}" "{location}"'.strip(), 2, None))
     #--------------------------------------------------------------#
 
     # Skip searches that ran recently, so each week brings new people
