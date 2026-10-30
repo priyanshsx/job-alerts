@@ -29,7 +29,7 @@ def search(query: str, num: int = 20, retries: int = 3) -> list[dict]:
     for attempt in range(retries):
         resp = httpx.post(
             SEARCH_URL,
-            headers={"Authorization": f"Bearer {os.environ['UNOBLOX_API_KEY']}"},
+            headers={"Authorization": f"Bearer {os.environ['UNOBLOX_SEARCH_API_KEY']}"},
             json={"query": query, "numResults": num, "includeDomains": ["linkedin.com"]},
             timeout=60
         )
