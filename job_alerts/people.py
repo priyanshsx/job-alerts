@@ -12,8 +12,8 @@ from job_alerts.sources import xray_search
 from job_alerts.sources.xray_search import normalize_linkedin_url
 #--------------------------------------------------------------#
 
-# Global variables and classes 
-SITE = ""
+# Global variables and classes
+COMPANY_TITLES = 2   # how many target titles to search for at each job alerts company
 
 class Person(BaseModel):
     url: str
@@ -41,6 +41,9 @@ PARSE_PROMPT = """
 
                 is_match: true only if the person's CURRENT title matches one of the target roles or a close
                 equivalent (including German titles), and they don't work for a staffing or recruitment agency.
+                If the snippet doesn't show the person's current title, is_match must be false.
+                If these results are for a specific company, is_match must also be false when the
+                snippet shows the person works at a different company.
                 reason: one short sentence on why this person is worth connecting with, in English.
                 Keep each url exactly as given.
 
@@ -53,29 +56,33 @@ def _now() -> datetime:
 #--------------------------------------------------------------#
 
 def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
-    """Return (query, priority, company) tuples, most valuable first."""
     pf = cfg.people_finder
     titles = pf["titles"]
-    queries = []
+    company_queries = []
+    region_queries = []
 #--------------------------------------------------------------#
-    # 1. Target titles at companies from recent job alerts: each person comes with a reason
+    # 1. Target titles at companies from recent job alerts (only the employer types we care about most)
     if pf.get("from_job_alerts", True):
         since = (_now() - timedelta(days=14)).isoformat()
+        employer_types = pf.get("company_employer_types", ["manufacturer_supplier"])
+        placeholders = ", ".join("?" for _ in employer_types)
         companies = conn.execute(
             "SELECT DISTINCT company_name FROM job_postings WHERE client_id = ? "
-            "AND is_relevant = 1 AND priority <= 2 AND created_at >= ? "
+            f"AND is_relevant = 1 AND employer_type IN ({placeholders}) AND created_at >= ? "
             "AND company_name IS NOT NULL",
-            (client_id, since),
+            (client_id, *employer_types, since),
         ).fetchall()
-        title_terms = " OR ".join(f'"{t}"' for t in titles)
         for row in companies:
-            queries.append((f'{SITE} "{row["company_name"]}" ({title_terms})'.strip(), 1, row["company_name"]))
+            for title in titles[:COMPANY_TITLES]:
+                company_queries.append((f'{title} at {row["company_name"]}', 1, row["company_name"]))
     #--------------------------------------------------------------#
 
-    # 2. Titles × locations: broader reach
+    # 2. Titles × locations × industries: broader reach, still on target
+    industries = pf.get("industries") or [""]
     for title in titles:
         for location in pf.get("locations", []):
-            queries.append((f'{SITE} "{title}" "{location}"'.strip(), 2, None))
+            for industry in industries:
+                region_queries.append((f'{title} {location} {industry}'.strip(), 2, None))
     #--------------------------------------------------------------#
 
     # Skip searches that ran recently, so each week brings new people
@@ -84,8 +91,13 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
         "SELECT query FROM people_searches WHERE client_id = ? AND run_at >= ?",
         (client_id, cutoff),
     )}
-    queries = [q for q in queries if q[0] not in recent]
-    return queries[: pf.get("max_searches_per_run", 30)]
+    company_queries = [q for q in company_queries if q[0] not in recent]
+    region_queries = [q for q in region_queries if q[0] not in recent]
+    #--------------------------------------------------------------#
+
+    # Company searches first (capped), then fill the rest of the run with region searches
+    company_queries = company_queries[: pf.get("max_company_searches", 10)]
+    return (company_queries + region_queries)[: pf.get("max_searches_per_run", 30)]
 #--------------------------------------------------------------#
 
 def find_people(client: str) -> None:
@@ -102,7 +114,7 @@ def find_people(client: str) -> None:
         try:
             results = xray_search.search(query)
         except Exception as e:
-            print(f"  search failed: {query} ({e})")
+            print(f"  {i}/{len(queries)}  search failed: {query} ({e})")
             continue
 
         conn.execute(
@@ -117,6 +129,7 @@ def find_people(client: str) -> None:
             "SELECT linkedin_url FROM people WHERE client_id = ?", (client_id,))}
         fresh = [r for r in results if r["url"] not in known]
         if not fresh:
+            print(f"  {i}/{len(queries)}  {len(results)} profiles, none new: {query}")
             continue
 
         company_context = (
@@ -135,14 +148,16 @@ def find_people(client: str) -> None:
         try:
             parsed = call_llm("parse_people", prompt, ParsedResults, client_id)
         except RuntimeError as e:
-            print(f"  parse failed: {query} ({e})")
+            print(f"  {i}/{len(queries)}  parse failed: {query} ({e})")
             continue
 
         fresh_urls = {r["url"] for r in fresh}
+        matched = 0
         for p in parsed.people:
             url = normalize_linkedin_url(p.url)
             if not p.is_match or url not in fresh_urls:   # ignore anything not in the actual results
                 continue
+            matched += 1
             cur = conn.execute(
                 """INSERT INTO people (client_id, full_name, title, company_name, location,
                    linkedin_url, source, query, reason, priority, created_at)
@@ -154,7 +169,7 @@ def find_people(client: str) -> None:
             )
             new += cur.rowcount
         conn.commit()
-        print(f"  {i}/{len(queries)}  {len(fresh)} results, {new} new people so far")
+        print(f"  {i}/{len(queries)}  {len(fresh)} new profiles, {matched} matched, {new} added so far: {query}")
         time.sleep(1)
 
     conn.close()

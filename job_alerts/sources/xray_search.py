@@ -4,7 +4,7 @@
 # Imports Libraries 
 import os 
 import time 
-from urllib.parse import urlparse 
+from urllib.parse import unquote, urlparse 
 import httpx 
 from dotenv import load_dotenv
 from job_alerts.core.db import ROOT 
@@ -19,7 +19,7 @@ SEARCH_URL = "https://api.unoblox.ai/v1/search"
 def normalize_linkedin_url(url: str) -> str:
     parts = urlparse(url.strip()).path.strip("/").split("/")
     if "in" in parts and parts.index("in") + 1 < len(parts):
-        handle = parts[parts.index("in") + 1].lower()
+        handle = unquote(parts[parts.index("in") + 1]).lower()
         return f"https://www.linkedin.com/in/{handle}"
     return url.strip()
 #--------------------------------------------------------------#
@@ -49,7 +49,7 @@ def search(query: str, num: int = 20, retries: int = 3) -> list[dict]:
     results = []
     for item in resp.json().get("results", []):
         url = item.get("url") or ""
-        if "linked.com/in/" not in url:
+        if "linkedin.com/in/" not in url:
             continue
         results.append({
             "url": normalize_linkedin_url(url),
