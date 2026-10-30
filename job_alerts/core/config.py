@@ -43,12 +43,12 @@ class Digest(Loose):
 
 class ClientConfig(Loose):
     client: str
-    display_name: str 
-    offer: str 
+    display_name: str
+    offer: str
     positioning: str
-    segments: list[Segment]
-    listening: Listening
-    digest: Digest 
+    segments: list[Segment] = []
+    listening: Listening | None = None
+    digest: Digest
 
 def _deep_merge(base: dict, override: dict) -> dict: 
     merged = dict(base)
