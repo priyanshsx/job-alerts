@@ -73,6 +73,5 @@ def send_people_digest(client: str, dry_run: bool = False) -> None:
     conn.commit()
     conn.close()
     print(f"[{client}] sent {len(rows)} people")
-
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

@@ -7,6 +7,8 @@ from job_alerts.collect import collect
 from job_alerts.classify import classify
 from job_alerts.prioritize import prioritize
 from job_alerts.digest import send_digest
+from job_alerts.people import find_people
+from job_alerts.people_digest import send_people_digest
 #--------------------------------------------------------------#
 
 def main():
@@ -19,10 +21,13 @@ def main():
         ("prioritize", "apply priority rules from the config"),
         ("digest", "build and send the digest email"),
         ("run", "fetch, classify, prioritize and send, in one go"),
+        ("people-find", "search for new people matching the target titles"),
+        ("people-digest", "build and send the weekly people email"),
+        ("people-run", "find people, then send the weekly email")
     ]:
         cmd = sub.add_parser(name, help=help_text)
         cmd.add_argument("--client", required=True)
-        if name == "digest":
+        if name in ("digest", "people-digest"):
             cmd.add_argument("--dry-run", action="store_true", help="save the HTML without sending")
 
     args = parser.parse_args()
@@ -40,6 +45,13 @@ def main():
         classify(args.client)
         prioritize(args.client)
         send_digest(args.client)
+    elif args.command == "people-find":
+        find_people(args.client)
+    elif args.command == "people-digest":
+        send_people_digest(args.client, dry_run=args.dry_run)
+    elif args.command == "people-run":
+        find_people(args.client)
+        send_people_digest(args.client)
 
 
 if __name__ == "__main__":
