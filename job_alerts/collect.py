@@ -15,6 +15,7 @@ def collect(client: str) -> None:
     excludes = [x.lower() for x in cfg.listening.job_exclude_keywords]
     must_contain = [x.lower() for x in cfg.listening.job_title_must_contain]
     agencies = [x.lower() for x in cfg.listening.job_agency_names]
+    blocked = [x.lower() for x in cfg.listening.job_exclude_companies]
 
     conn = get_conn()
     client_id = get_client_id(conn, client)
@@ -30,6 +31,8 @@ def collect(client: str) -> None:
             if must_contain and not any(x in title for x in must_contain):
                 continue
             if any(a in company for a in agencies):
+                continue
+            if any(b in company for b in blocked):
                 continue
             cur = conn.execute(
                 """

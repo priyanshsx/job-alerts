@@ -33,6 +33,7 @@ class Segment(Loose):
 class Listening(Loose):
     job_keywords: list[str]
     job_exclude_keywords: list[str] = []
+    job_exclude_companies: list[str] = []
     job_title_must_contain: list[str] = []
     job_agency_names: list[str] = []
     job_countries: list[str]
