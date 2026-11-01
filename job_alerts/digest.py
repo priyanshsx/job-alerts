@@ -23,6 +23,12 @@ EMPLOYER_LABELS = {
     "unknown": "Company not recognized",
     "large_enterprise": "Large enterprise"
 }
+
+LANGUAGE_LABELS = {
+    "english_ok": "English OK",
+    "german_only": "German required",
+    "unclear": "Language unclear"
+}
 #--------------------------------------------------------------#
 
 def _search_link(text: str, query: str, url: str) -> str:
@@ -42,6 +48,7 @@ def _entry(r) -> str:
         EMPLOYER_LABELS.get(r["employer_type"], r["employer_type"]),
         f"{r['role_type']} role",
         erp.upper() if erp else None,
+        LANGUAGE_LABELS.get(r["language_requirement"])
     ]))
     return (
         f"<p><b>{escape(r['title'] or '')}</b><br>"
