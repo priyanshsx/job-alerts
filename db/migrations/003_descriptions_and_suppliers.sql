@@ -1,4 +1,3 @@
-ALTER TABLE job_postings ADD COLUMN description text;
 ALTER TABLE job_postings ADD COLUMN language_requirement TEXT;
 ALTER TABLE job_postings ADD COLUMN company_size TEXT;
 ALTER TABLE job_postings ADD COLUMN employee_estimate INTEGER;
@@ -19,4 +18,4 @@ CREATE TABLE IF NOT EXISTS supplier_searches (
     results INTEGER,
     run_at TEXT,
     UNIQUE (client_id, query)
-)
+);
