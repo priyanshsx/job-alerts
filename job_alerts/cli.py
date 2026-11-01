@@ -4,6 +4,7 @@
 # Imports Libraries
 import argparse
 from job_alerts.collect import collect
+from job_alerts.describe import describe
 from job_alerts.classify import classify
 from job_alerts.prioritize import prioritize
 from job_alerts.digest import send_digest
@@ -17,10 +18,11 @@ def main():
 
     for name, help_text in [
         ("fetch", "fetch and store new job postings"),
+        ("describe", "fetch full job descriptions for new postings"),
         ("classify", "classify new job postings with the LLM"),
         ("prioritize", "apply priority rules from the config"),
         ("digest", "build and send the digest email"),
-        ("run", "fetch, classify, prioritize and send, in one go"),
+        ("run", "fetch, describe, classify, prioritize and send, in one go"),
         ("people-find", "search for new people matching the target titles"),
         ("people-digest", "build and send the weekly people email"),
         ("people-run", "find people, then send the weekly email")
@@ -34,6 +36,8 @@ def main():
 
     if args.command == "fetch":
         collect(args.client)
+    elif args.command == "describe":
+        describe(args.client)
     elif args.command == "classify":
         classify(args.client)
     elif args.command == "prioritize":
@@ -42,6 +46,7 @@ def main():
         send_digest(args.client, dry_run=args.dry_run)
     elif args.command == "run":
         collect(args.client)
+        describe(args.client)
         classify(args.client)
         prioritize(args.client)
         send_digest(args.client)
