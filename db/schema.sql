@@ -19,36 +19,47 @@ CREATE TABLE IF NOT EXISTS companies (
     erp_system TEXT,
     description TEXT,
     fit_score INTEGER,
+    supplies_to TEXT,
+    supplier_evidence_url TEXT,
+    source TEXT,
+    website TEXT,
+    category TEXT,
     enriched_at TEXT,
     created_at TEXT,
     UNIQUE (client_id, name_normalized)
 );
 
 CREATE TABLE IF NOT EXISTS job_postings (
-    id INTEGER PRIMARY KEY,
-    client_id INTEGER,
-    source TEXT,
-    external_id TEXT,
-    url TEXT,
-    title TEXT,
-    company_name TEXT,
-    company_id INTEGER,
-    location TEXT,
-    country TEXT,
-    posted_at TEXT,
-    description TEXT,
-    contact_name TEXT,
-    is_relevant INTEGER,
-    role_type TEXT,
-    is_agency INTEGER,
-    erp_system TEXT,
-    segment TEXT,
-    priority INTEGER,
-    classified_at TEXT,
-    created_at TEXT,
-    employer_type TEXT, 
-    reason TEXT,
-    UNIQUE (client_id, source, external_id)
+  id INTEGER PRIMARY KEY,
+  client_id INTEGER,
+  source TEXT,
+  external_id TEXT,
+  url TEXT,
+  title TEXT,
+  company_name TEXT,
+  company_id INTEGER,
+  location TEXT,
+  country TEXT,
+  posted_at TEXT,
+  description TEXT,
+  contact_name TEXT,
+  is_relevant INTEGER,
+  role_type TEXT,
+  is_agency INTEGER,
+  erp_system TEXT,
+  segment TEXT,
+  employer_type TEXT,
+  reason TEXT,
+  language_requirement TEXT,
+  company_size TEXT,
+  employee_estimate INTEGER,
+  named_customers TEXT,
+  supplies_anchor_customer INTEGER,
+  supplier_evidence TEXT,
+  priority INTEGER,
+  classified_at TEXT,
+  created_at TEXT,
+  UNIQUE (client_id, source, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS signals (
@@ -109,6 +120,15 @@ CREATE TABLE IF NOT EXISTS people (
 );
 
 CREATE TABLE IF NOT EXISTS people_searches (
+    id INTEGER PRIMARY KEY,
+    client_id INTEGER,
+    query TEXT,
+    results INTEGER,
+    run_at TEXT,
+    UNIQUE (client_id, query)
+);
+
+CREATE TABLE IF NOT EXISTS supplier_searches (
     id INTEGER PRIMARY KEY,
     client_id INTEGER,
     query TEXT,
