@@ -4,14 +4,17 @@
 # Imports Libraries 
 import time 
 import httpx 
+import base64 
+import time 
+import httpx 
 #--------------------------------------------------------------#
 
 # Global Variables 
 BASE_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
 HEADERS = {"X-API-Key": "jobboerse-jobsuche"}
 PAGE_SIZE = 50
-
 COUNTRY_CODES = {"DEUTSCHLAND": "DE", "ÖSTERREICH": "AT", "SCHWEIZ": "CH"}
+DETAILS_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{code}"
 #--------------------------------------------------------------#
 
 # Searches for the required job postings 
@@ -57,5 +60,16 @@ def _normalize(item: dict) -> dict:
         "url": item.get("externeURL")
             or f"https://www.arbeitsagentur.de/jobsuche/jobdetail/{refnr}"
     }
+#--------------------------------------------------------------#
+ 
+# Fetches language details for the listings 
+def fetch_details(external_id: str) -> str | None:
+    code = base64.b64encode(external_id.encode()).decode()
+    resp = httpx.get(DETAILS_URL.format(code=code), headers=HEADERS, timeout=30)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.json().get("stellenangebotsBeschreibung")
+
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#
