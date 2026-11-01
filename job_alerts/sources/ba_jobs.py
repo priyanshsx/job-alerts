@@ -62,7 +62,7 @@ def _normalize(item: dict) -> dict:
     }
 #--------------------------------------------------------------#
  
-# Fetches language details for the listings 
+# Fetches description text for the job postings 
 def fetch_details(external_id: str) -> str | None:
     code = base64.b64encode(external_id.encode()).decode()
     resp = httpx.get(DETAILS_URL.format(code=code), headers=HEADERS, timeout=30)
