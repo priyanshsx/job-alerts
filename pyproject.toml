@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "job-alerts"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["python-dotenv", "pyyaml", "pydantic", "httpx", "openai"]
+dependencies = ["python-dotenv", "pyyaml", "pydantic", "httpx", "openai", "gspread", "google-auth", "openpyxl", "pandas"]
 
 [tool.setuptools.packages.find]
 include = ["job_alerts"]
