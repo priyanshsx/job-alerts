@@ -7,6 +7,7 @@ from job_alerts.collect import collect
 from job_alerts.describe import describe
 from job_alerts.classify import classify
 from job_alerts.prioritize import prioritize
+from job_alerts.leads import build_leads
 from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
@@ -21,8 +22,9 @@ def main():
         ("describe", "fetch full job descriptions for new postings"),
         ("classify", "classify new job postings with the LLM"),
         ("prioritize", "apply priority rules from the config"),
+        ("leads", "create or update leads from prioritized postings"),
         ("digest", "build and send the digest email"),
-        ("run", "fetch, describe, classify, prioritize and send, in one go"),
+        ("run", "fetch, describe, classify, prioritize, build leads and send, in one go"),
         ("people-find", "search for new people matching the target titles"),
         ("people-digest", "build and send the weekly people email"),
         ("people-run", "find people, then send the weekly email")
@@ -42,6 +44,8 @@ def main():
         classify(args.client)
     elif args.command == "prioritize":
         prioritize(args.client)
+    elif args.command == "leads":
+        build_leads(args.client)
     elif args.command == "digest":
         send_digest(args.client, dry_run=args.dry_run)
     elif args.command == "run":
@@ -49,6 +53,7 @@ def main():
         describe(args.client)
         classify(args.client)
         prioritize(args.client)
+        build_leads(args.client)
         send_digest(args.client)
     elif args.command == "people-find":
         find_people(args.client)
