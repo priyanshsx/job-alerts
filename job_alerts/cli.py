@@ -8,6 +8,7 @@ from job_alerts.describe import describe
 from job_alerts.classify import classify
 from job_alerts.prioritize import prioritize
 from job_alerts.leads import build_leads
+from job_alerts.sync import sync
 from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
@@ -24,7 +25,8 @@ def main():
         ("prioritize", "apply priority rules from the config"),
         ("leads", "create or update leads from prioritized postings"),
         ("digest", "build and send the digest email"),
-        ("run", "fetch, describe, classify, prioritize, build leads and send, in one go"),
+        ("sync", "two-way sync between leads and the Google Sheet"),
+        ("run", "fetch, describe, classify, prioritize, build leads, send and sync, in one go"),
         ("people-find", "search for new people matching the target titles"),
         ("people-digest", "build and send the weekly people email"),
         ("people-run", "find people, then send the weekly email")
@@ -48,6 +50,8 @@ def main():
         build_leads(args.client)
     elif args.command == "digest":
         send_digest(args.client, dry_run=args.dry_run)
+    elif args.command == "sync":
+        sync(args.client)
     elif args.command == "run":
         collect(args.client)
         describe(args.client)
@@ -55,6 +59,7 @@ def main():
         prioritize(args.client)
         build_leads(args.client)
         send_digest(args.client)
+        sync(args.client)
     elif args.command == "people-find":
         find_people(args.client)
     elif args.command == "people-digest":
