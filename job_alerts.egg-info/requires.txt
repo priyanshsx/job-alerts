@@ -3,3 +3,7 @@ pyyaml
 pydantic
 httpx
 openai
+gspread
+google-auth
+openpyxl
+pandas
