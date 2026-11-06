@@ -13,6 +13,7 @@ from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
 from job_alerts.people_sync import people_sync
+from job_alerts.contacts import contacts
 #--------------------------------------------------------------#
 
 def main():
@@ -31,6 +32,7 @@ def main():
         ("people-find", "search for new people matching the target titles"),
         ("people-digest", "build and send the weekly people email"),
         ("people-sync", "two-way sync between people and the People tab"),
+        ("contacts", "find contacts and emails for leads and people ticked in the sheet"),
         ("people-run", "find people, send the weekly email, then sync the People tab")
     ]:
         cmd = sub.add_parser(name, help=help_text)
@@ -68,6 +70,8 @@ def main():
         send_people_digest(args.client, dry_run=args.dry_run)
     elif args.command == "people-sync":
         people_sync(args.client)
+    elif args.command == "contacts":
+        contacts(args.client)
     elif args.command == "people-run":
         find_people(args.client)
         send_people_digest(args.client)

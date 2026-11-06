@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS people (
     connection_status TEXT,     -- from the People tab: to connect, requested, connected, conversation, skip
     note TEXT,
     last_updated TEXT,
+    find_email INTEGER DEFAULT 0,
+    email TEXT,
+    email_status TEXT,
+    email_source TEXT,
+    email_checked_at TEXT,
     created_at TEXT,
     UNIQUE (client_id, linkedin_url)
 );
@@ -163,6 +168,16 @@ CREATE TABLE IF NOT EXISTS leads (
     last_updated TEXT,
     created_at TEXT,
     updated_at TEXT,
+    find_contact INTEGER DEFAULT 0,
+    contact_role TEXT,
+    domain TEXT,
+    contact_person_id INTEGER,
+    contact_name TEXT,
+    contact_title TEXT,
+    contact_linkedin TEXT,
+    contact_email TEXT,
+    email_status TEXT,
+    contact_checked_at TEXT,
     UNIQUE (client_id, name_normalized)
 );
 
@@ -172,4 +187,29 @@ CREATE TABLE IF NOT EXISTS weekly_reviews_sent (
     week TEXT,
     sent_at TEXT,
     UNIQUE (client_id, week)
+);
+
+-- Company domains, found once and reused
+CREATE TABLE IF NOT EXISTS company_domains (
+  id INTEGER PRIMARY KEY,
+  client_id INTEGER,
+  name_normalized TEXT,
+  domain TEXT,                 -- empty string = searched, none found
+  source_url TEXT,
+  checked_at TEXT,
+  UNIQUE (client_id, name_normalized)
+);
+
+-- Every email lookup attempt, for credit tracking and never repeating a lookup
+CREATE TABLE IF NOT EXISTS email_lookups (
+  id INTEGER PRIMARY KEY,
+  client_id INTEGER,
+  person_id INTEGER,
+  provider TEXT,
+  result TEXT,                 -- found, not_found, error
+  email TEXT,
+  email_status TEXT,
+  credits INTEGER DEFAULT 0,
+  detail TEXT,
+  created_at TEXT
 );

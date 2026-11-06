@@ -22,6 +22,11 @@ ENGINE_COLUMNS = {                 # filled by the engine; the team should not e
     "Size": "company_size",
     "Links": "links",
     "On team list": "on_team_list",
+    "Contact name": "contact_name",        # filled by the contacts command
+    "Contact title": "contact_title",
+    "Contact LinkedIn": "contact_linkedin",
+    "Contact email": "contact_email",
+    "Email status": "email_status",
 }
 TEAM_COLUMNS = {                   # edited by the team; the engine only reads these
     "Status": "status",
@@ -31,6 +36,8 @@ TEAM_COLUMNS = {                   # edited by the team; the engine only reads t
     "Promising": "promising",
     "Notes": "notes",
     "Last updated": "last_updated",
+    "Find contact": "find_contact",        # Monday tick: find a contact and email for this lead
+    "Contact role": "contact_role",        # optional: who to look for, e.g. "Head of IT"
 }
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
 #--------------------------------------------------------------#
@@ -93,11 +100,13 @@ def sync(client: str) -> None:
         promising = cell(row, "Promising").upper() in ("TRUE", "YES", "1", "X")
         conn.execute(
             """UPDATE leads SET status = ?, owner = ?, next_step = ?, next_step_date = ?,
-               promising = ?, notes = ?, last_updated = ? WHERE id = ? AND client_id = ?""",
+               promising = ?, notes = ?, last_updated = ?, find_contact = ?, contact_role = ?
+               WHERE id = ? AND client_id = ?""",
             (cell(row, "Status") or "new", cell(row, "Owner") or None,
              cell(row, "Next step") or None, cell(row, "Next step date") or None,
              int(promising), cell(row, "Notes") or None, cell(row, "Last updated") or None,
-             lead_id, client_id),
+             int(cell(row, "Find contact").upper() in ("TRUE", "YES", "1", "X")),
+             cell(row, "Contact role") or None, lead_id, client_id),
         )
     conn.commit()
     #--------------------------------------------------------------#

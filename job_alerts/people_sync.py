@@ -27,14 +27,18 @@ ENGINE_COLUMNS = {                 # written by the tool; don't edit these in th
     "Priority": "priority",
     "Found via": "source",
     "Found on": "created_at",
+    "Email": "email",                      # filled by the contacts command
+    "Email status": "email_status",
 }
 TEAM_COLUMNS = {                   # edited by you; the tool only reads these
     "Status": "connection_status", # to connect, requested, connected, conversation, skip
     "Note": "note",
     "Last updated": "last_updated",
+    "Find email": "find_email",            # Monday tick: find this person's email
 }
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
-SOURCE_LABELS = {"job_alerts_company": "company hiring now", "title_search": "role search"}
+SOURCE_LABELS = {"job_alerts_company": "company hiring now", "title_search": "role search",
+                 "lead_contact": "contact for a lead"}
 #--------------------------------------------------------------#
 
 # Format one engine value for the sheet
@@ -93,10 +97,12 @@ def people_sync(client: str) -> None:
     # 1. Pull: copy your columns into the database
     for person_id, (_, row) in in_sheet.items():
         conn.execute(
-            "UPDATE people SET connection_status = ?, note = ?, last_updated = ? "
+            "UPDATE people SET connection_status = ?, note = ?, last_updated = ?, find_email = ? "
             "WHERE id = ? AND client_id = ?",
             (cell(row, "Status").lower() or None, cell(row, "Note") or None,
-             cell(row, "Last updated") or None, person_id, client_id),
+             cell(row, "Last updated") or None,
+             int(cell(row, "Find email").upper() in ("TRUE", "YES", "1", "X")),
+             person_id, client_id),
         )
     conn.commit()
 
