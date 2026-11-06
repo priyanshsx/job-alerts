@@ -12,6 +12,7 @@ from job_alerts.sync import sync
 from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
+from job_alerts.people_sync import people_sync
 #--------------------------------------------------------------#
 
 def main():
@@ -29,7 +30,8 @@ def main():
         ("run", "fetch, describe, classify, prioritize, build leads, send and sync, in one go"),
         ("people-find", "search for new people matching the target titles"),
         ("people-digest", "build and send the weekly people email"),
-        ("people-run", "find people, then send the weekly email")
+        ("people-sync", "two-way sync between people and the People tab"),
+        ("people-run", "find people, send the weekly email, then sync the People tab")
     ]:
         cmd = sub.add_parser(name, help=help_text)
         cmd.add_argument("--client", required=True)
@@ -64,9 +66,12 @@ def main():
         find_people(args.client)
     elif args.command == "people-digest":
         send_people_digest(args.client, dry_run=args.dry_run)
+    elif args.command == "people-sync":
+        people_sync(args.client)
     elif args.command == "people-run":
         find_people(args.client)
         send_people_digest(args.client)
+        people_sync(args.client)
 
 
 if __name__ == "__main__":

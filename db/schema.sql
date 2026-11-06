@@ -115,6 +115,9 @@ CREATE TABLE IF NOT EXISTS people (
     priority INTEGER,
     status TEXT DEFAULT 'new',
     sent_at TEXT,
+    connection_status TEXT,     -- from the People tab: to connect, requested, connected, conversation, skip
+    note TEXT,
+    last_updated TEXT,
     created_at TEXT,
     UNIQUE (client_id, linkedin_url)
 );
