@@ -37,7 +37,11 @@ def search(query: str, days: int = 7, num: int = 20, retries: int = 3) -> list[d
         if resp.status_code in (429, 502, 503):
             time.sleep(2 ** attempt)
             continue
-        resp.raise_for_status()
+        if resp.status_code == 400 and payload["num"] != 10:
+            payload["num"] = 10                      # some plans only accept 10 results per search
+            continue
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Serper {resp.status_code} for {query!r}: {resp.text[:300]}")
         return resp.json().get("organic", [])
     raise RuntimeError("Serper unavailable after retries")
 #--------------------------------------------------------------#

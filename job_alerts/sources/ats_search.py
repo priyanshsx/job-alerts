@@ -77,7 +77,12 @@ def fetch(role: str, markets: list[str], days: int = 7, sites: list[str] | None 
     for site in sites or list(SITES):
         site_filter, pattern = SITES[site]
         query = f'{site_filter} "{role}"' + (f" ({market_filter})" if markets else "")
-        for r in serper.search(query, days=days):
+        try:
+            results = serper.search(query, days=days)
+        except RuntimeError as e:
+            print(f"    {site}: {e}")
+            continue
+        for r in results:
             url = r.get("link", "")
             m = pattern.search(url)
             if not m:
