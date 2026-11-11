@@ -28,6 +28,7 @@ class PostingClassification(BaseModel):
     named_customers: list[str] = []
     supplies_anchor_customer: bool
     supplier_evidence: str | None = None
+    business_model: Literal["b2b", "b2c", "both", "unknown"] = "unknown"
     priority: int = Field(ge=1, le=3)
     reason: str
 #--------------------------------------------------------------#
@@ -51,8 +52,7 @@ Description:
 {description}
 
 Definitions:
-- is_relevant: true if the role is about master data, data quality or data governance in a
-  business or ERP context. False for unrelated meanings or staffing agencies.
+- is_relevant: {relevance}
 - employer_type:
   manufacturer_supplier = manufacturer or supplier (including pharma and contract manufacturers)
   consultancy = IT or SAP consultancy, systems integrator or ERP reseller
@@ -60,8 +60,10 @@ Definitions:
   other_industry = insurance, banking, utilities, public sector, retail, healthcare, etc.
   agency = staffing or recruitment agency
   unknown = cannot tell
-- role_type: project (migration, implementation, transformation, architecture),
-  lead (team lead or head of a data function), routine (ongoing specialist or clerk work).
+- role_type: project (migration, implementation, transformation, architecture, or a time-bound
+  contract), lead (team lead or head of a function), routine (ongoing specialist or individual
+  contributor work).
+- business_model: who the company sells to: b2b (businesses), b2c (consumers), both, or unknown.
 - language_requirement:
   english_ok = English is the working language, OR the posting asks for English and German,
                OR the posting is written in English and does not demand fluent German
@@ -93,11 +95,14 @@ def _examples_text(examples: list[dict]) -> str:
 
 def classify(client: str) -> None:
     cfg = load_config(client)
-    supplier = next((s for s in cfg.segments if s.name == "supplier"), None)
+    supplier = next((s for s in (cfg.segments or []) if s.name == "supplier"), None)
     industries = ", ".join(supplier.industries) if supplier else "(any)"
     anchors = (getattr(cfg, "supply_chain", None) or {}).get("anchor_customers", [])
     examples = _examples_text(cfg.job_alerts.get("reference_examples", []))
     max_employees = cfg.job_alerts.get("max_employees", 3000)
+    relevance = str(cfg.job_alerts.get("relevance") or (
+        "true if the role is about master data, data quality or data governance in a business or "
+        "ERP context. False for unrelated meanings or staffing agencies.")).strip()
 
     conn = get_conn()
     client_id = get_client_id(conn, client)
@@ -115,7 +120,7 @@ def classify(client: str) -> None:
             display_name=cfg.display_name, offer=cfg.offer.strip(),
             positioning=cfg.positioning.strip(), industries=industries,
             examples=examples, anchors=", ".join(anchors) or "(none)",
-            max_employees=max_employees,
+            max_employees=max_employees, relevance=relevance,
             title=row["title"], company=row["company_name"], location=row["location"],
             description=description or "(no description available)",
         )
@@ -142,12 +147,12 @@ def classify(client: str) -> None:
             """UPDATE job_postings SET is_relevant = ?, employer_type = ?, role_type = ?,
                erp_system = ?, segment = ?, language_requirement = ?, company_size = ?,
                employee_estimate = ?, named_customers = ?, supplies_anchor_customer = ?,
-               supplier_evidence = ?, priority = ?, reason = ?, classified_at = ?
+               supplier_evidence = ?, business_model = ?, priority = ?, reason = ?, classified_at = ?
                WHERE id = ?""",
             (int(result.is_relevant), result.employer_type, result.role_type,
              result.erp_system, result.segment, result.language_requirement,
              result.company_size, result.employee_estimate, ", ".join(customers),
-             int(supplies_anchor), evidence, result.priority, result.reason,
+             int(supplies_anchor), evidence, result.business_model, result.priority, result.reason,
              datetime.now(timezone.utc).isoformat(), row["id"]),
         )
         conn.commit()

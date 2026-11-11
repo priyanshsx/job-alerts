@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS job_postings (
   supplies_anchor_customer INTEGER,
   supplier_evidence TEXT,
   priority INTEGER,
+  business_model TEXT,
   classified_at TEXT,
   created_at TEXT,
   UNIQUE (client_id, source, external_id)

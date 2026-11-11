@@ -36,7 +36,9 @@ class Listening(Loose):
     job_exclude_companies: list[str] = []
     job_title_must_contain: list[str] = []
     job_agency_names: list[str] = []
-    job_countries: list[str]
+    job_countries: list[str] = []
+    job_sources: list[str] = ["ba_jobs"]   # ba_jobs, ats_search, remote_boards
+    job_markets: list[str] = []            # ats_search: market words added to every search
 
 class Digest(Loose):
     email_to: list[str]
