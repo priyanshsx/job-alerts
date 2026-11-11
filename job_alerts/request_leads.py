@@ -63,6 +63,8 @@ def import_requests(client: str) -> None:
     sheets_cfg = getattr(cfg, "sheets", None) or {}
     if not sheets_cfg.get("spreadsheet_id"):
         return
+    if sheets_cfg.get("requests_to_leads", True) is False:
+        return                                         # e.g. Quartermaster: requests are reply suggestions only
     tab = sheets_cfg.get("requests_tab", "Requests")
     try:
         requests = read_requests(sheets_cfg["spreadsheet_id"], tab)
