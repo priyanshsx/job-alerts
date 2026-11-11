@@ -11,6 +11,7 @@
 #--------------------------------------------------------------#
 
 # Imports libraries
+import re
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
@@ -77,8 +78,19 @@ Results:
 {results}"""
 #--------------------------------------------------------------#
 
-# Find (or reuse) a company's website domain
+# Find a company's domain. A field like "A-Z Formenbau GmbH / Continental" (two companies, as in a
+# LinkedIn headline) is tried one part at a time.
 def find_domain(conn, cfg, client_id: int, company: str, country: str | None) -> str | None:
+    parts = [p.strip() for p in re.split(r"\s+[/|]\s+", company or "") if p.strip()]
+    for part in parts or [company]:
+        domain = _find_domain_one(conn, cfg, client_id, part, country)
+        if domain:
+            return domain
+    return None
+#--------------------------------------------------------------#
+
+# Find (or reuse) one company's website domain
+def _find_domain_one(conn, cfg, client_id: int, company: str, country: str | None) -> str | None:
     key = normalize_name(company)
     if not key:
         return None
@@ -104,6 +116,7 @@ def find_domain(conn, cfg, client_id: int, company: str, country: str | None) ->
                  "VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_id, name_normalized) DO UPDATE SET "
                  "domain = excluded.domain, source_url = excluded.source_url, checked_at = excluded.checked_at",
                  (client_id, key, domain or "", source_url, _now()))
+    conn.commit()                                    # save now: the LLM helper writes through its own connection
     return domain
 #--------------------------------------------------------------#
 
@@ -156,12 +169,14 @@ def find_email(conn, client_id: int, person: dict, domain: str | None, providers
             conn.execute("INSERT INTO email_lookups (client_id, person_id, provider, result, credits, "
                          "detail, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
                          (client_id, person.get("id"), name, result_status, detail, _now()))
+            conn.commit()
             continue
         tried = True                                 # a provider actually answered
         conn.execute("INSERT INTO email_lookups (client_id, person_id, provider, result, email, "
                      "email_status, credits, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                      (client_id, person.get("id"), name, "found" if result.email else result.status,
                       result.email, result.status, result.credits, result.detail, _now()))
+        conn.commit()                                # every lookup is saved straight away (credit tracking)
         if result.email and result.status == "verified":
             return result.email, "verified", name
         if result.email and best[0] is None:
@@ -222,6 +237,7 @@ def contacts(client: str) -> None:
         if contact:
             stats["contacts"] += 1
             person_id = person_id or save_contact_person(conn, client_id, contact, lead)
+            conn.commit()
             email, status, source = find_email(conn, client_id, {**contact, "id": person_id},
                                                domain, providers, unavailable)
             if email:
