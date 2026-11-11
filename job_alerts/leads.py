@@ -75,5 +75,9 @@ def build_leads(client: str) -> None:
     conn.commit()
     conn.close()
     print(f"[{client}] leads: {new} new, {updated} updated")
+
+    # Requests found by content-suggester (Requests tab) become priority 1 leads
+    from job_alerts.request_leads import import_requests
+    import_requests(client)
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

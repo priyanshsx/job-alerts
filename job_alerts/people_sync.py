@@ -38,7 +38,8 @@ TEAM_COLUMNS = {                   # edited by you; the tool only reads these
 }
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
 SOURCE_LABELS = {"job_alerts_company": "company hiring now", "title_search": "role search",
-                 "lead_contact": "contact for a lead"}
+                 "lead_contact": "contact for a lead",
+                 "requester": "asked for help"}
 #--------------------------------------------------------------#
 
 # Format one engine value for the sheet

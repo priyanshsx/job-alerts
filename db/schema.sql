@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS leads (
     contact_email TEXT,
     email_status TEXT,
     contact_checked_at TEXT,
+    request_id INTEGER,
     UNIQUE (client_id, name_normalized)
 );
 

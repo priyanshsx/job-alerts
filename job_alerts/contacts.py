@@ -225,6 +225,14 @@ def contacts(client: str) -> None:
     for lead in leads:
         stats["leads"] += 1
         print(f"  lead: {lead['company_name']}")
+        if lead["request_id"] and not lead["contact_person_id"] and \
+                normalize_name(lead["company_name"]) != lead["name_normalized"]:
+            # A request with no company stated: nothing to search. Reply via the post instead.
+            print("    request without a company or personal profile: reach out via the post link")
+            conn.execute("UPDATE leads SET email_status = ?, contact_checked_at = ? WHERE id = ?",
+                         ("reply via the post", _now(), lead["id"]))
+            conn.commit()
+            continue
         domain = lead["domain"] or find_domain(conn, cfg, client_id, lead["company_name"], lead["country"])
         if lead["contact_person_id"]:                # contact found on an earlier run: only the email is left
             contact = {"linkedin_url": lead["contact_linkedin"], "full_name": lead["contact_name"],
