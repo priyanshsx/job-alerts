@@ -28,6 +28,10 @@ def _section(title: str, rows) -> str:
 
 def send_people_digest(client: str, dry_run: bool = False) -> None:
     cfg = load_config(client)
+    digest_cfg = getattr(cfg, "digest", None) or {}
+    if not dry_run and digest_cfg.get("send_email", True) is False:
+        print(f"[{client}] email off (digest.send_email: false): everything is in the Google Sheet")
+        return
     limit = cfg.people_finder.get("weekly_target", 75)
 
     conn = get_conn()

@@ -29,6 +29,12 @@ MARKET_HINTS = {
            "pune", "hyderabad", "chennai"],
     "GB": ["united kingdom", "london", "manchester", "edinburgh", "england", " uk"],
     "SG": ["singapore"],
+    "NL": ["netherlands", "nederland", "amsterdam", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag"],
+    "ES": ["spain", "españa", "espana", "madrid", "barcelona", "valencia", "sevilla", "bilbao"],
+    "PL": ["poland", "polska", "warsaw", "warszawa", "kraków", "krakow", "wrocław", "wroclaw", "poznań", "poznan", "gdańsk", "gdansk", "łódź", "lodz"],
+    "DE": ["germany", "deutschland", "munich", "münchen", "berlin", "hamburg", "frankfurt", "stuttgart", "düsseldorf", "cologne", "köln"],
+    "AT": ["austria", "österreich", "vienna", "wien", "graz", "linz"],
+    "CH": ["switzerland", "schweiz", "zurich", "zürich", "basel", "geneva", "bern"],
     "US": ["united states", "new york", "san francisco", "austin", "boston", "seattle",
            "los angeles", "chicago", " usa", ", ny", ", ca"],
 }

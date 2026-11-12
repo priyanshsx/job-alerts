@@ -26,7 +26,7 @@ EMPLOYER_LABELS = {
 
 LANGUAGE_LABELS = {
     "english_ok": "English OK",
-    "german_only": "German required",
+    "german_only": "Local language required",
     "unclear": "Language unclear"
 }
 #--------------------------------------------------------------#
@@ -67,6 +67,10 @@ def _section(title: str, rows) -> str:
 # Sends the mailer 
 def send_digest(client: str, dry_run: bool = False) -> None:
     cfg = load_config(client)
+    digest_cfg = getattr(cfg, "digest", None) or {}
+    if not dry_run and digest_cfg.get("send_email", True) is False:
+        print(f"[{client}] email off (digest.send_email: false): everything is in the Google Sheet")
+        return
     max_priority = cfg.job_alerts.get("digest_max_priority", 2)
 
     conn = get_conn()

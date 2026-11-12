@@ -140,11 +140,13 @@ def find_contact(cfg, client_id: int, lead, roles: list[str], max_searches: int)
     return None
 #--------------------------------------------------------------#
 
-# Credits used this month per provider (from the lookup log)
-def credits_used(conn, provider: str) -> int:
+# Credits this client used this month per provider (from the lookup log). Each client's
+# monthly_limit is its own budget; the budgets of all clients should add up to the free tiers.
+def credits_used(conn, provider: str, client_id: int) -> int:
     month = datetime.now(timezone.utc).strftime("%Y-%m")
     row = conn.execute("SELECT COALESCE(SUM(credits), 0) FROM email_lookups WHERE provider = ? "
-                       "AND substr(created_at, 1, 7) = ?", (provider, month)).fetchone()
+                       "AND client_id = ? AND substr(created_at, 1, 7) = ?",
+                       (provider, client_id, month)).fetchone()
     return row[0]
 #--------------------------------------------------------------#
 
@@ -156,7 +158,7 @@ def find_email(conn, client_id: int, person: dict, domain: str | None, providers
     for p in providers:
         name, limit = p["name"], p.get("monthly_limit", 0)
         module = PROVIDERS.get(name)
-        if not module or name in unavailable or credits_used(conn, name) >= limit:
+        if not module or name in unavailable or credits_used(conn, name, client_id) >= limit:
             continue
         try:
             result = module.find(person, domain)
@@ -291,7 +293,7 @@ def contacts(client: str) -> None:
           f"{stats['lead_emails']} lead emails; {stats['people']} people checked, "
           f"{stats['people_emails']} emails")
     for p in providers:
-        used = credits_used(conn, p["name"])
+        used = credits_used(conn, p["name"], client_id)
         left = p.get("monthly_limit", 0) - used
         flag = "  <- running low" if left <= warn_remaining else ""
         state = " (not available: check its API key or plan)" if p["name"] in unavailable else ""

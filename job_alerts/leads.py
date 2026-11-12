@@ -79,5 +79,9 @@ def build_leads(client: str) -> None:
     # Requests found by content-suggester (Requests tab) become priority 1 leads
     from job_alerts.request_leads import import_requests
     import_requests(client)
+
+    # Job ads spotted in posts (content-suggester) become leads too (replaces the old Hiring tab)
+    from job_alerts.hiring_leads import import_hiring_posts
+    import_hiring_posts(client)
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

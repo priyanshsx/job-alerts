@@ -65,10 +65,11 @@ Definitions:
   contributor work).
 - business_model: who the company sells to: b2b (businesses), b2c (consumers), both, or unknown.
 - language_requirement:
-  english_ok = English is the working language, OR the posting asks for English and German,
-               OR the posting is written in English and does not demand fluent German
-  german_only = fluent or business-level German is required and English is not mentioned as
-                sufficient (a posting written only in German with no mention of English counts)
+  english_ok = English is the working language, OR the posting asks for English and the local
+               language, OR the posting is written in English and does not demand the local language
+  german_only = fluent or business-level command of the local language (German, Dutch, Spanish,
+                Polish, ...) is required and English is not mentioned as sufficient (a posting
+                written only in the local language with no mention of English counts)
   unclear = cannot tell
 - company_size: small (<250 employees), mid (250-{max_employees}), large (>{max_employees}),
   unknown. Use what the description says (e.g. "über 1.000 Mitarbeitende"). If it states a
@@ -106,9 +107,11 @@ def classify(client: str) -> None:
 
     conn = get_conn()
     client_id = get_client_id(conn, client)
+    max_per_run = int(cfg.job_alerts.get("max_classify_per_run", 300))     # cost guard, newest first
     rows = conn.execute(
-        "SELECT * FROM job_postings WHERE client_id = ? AND classified_at IS NULL",
-        (client_id,),
+        "SELECT * FROM job_postings WHERE client_id = ? AND classified_at IS NULL "
+        "ORDER BY created_at DESC LIMIT ?",
+        (client_id, max_per_run),
     ).fetchall()
     print(f"[{client}] classifying {len(rows)} postings")
 
