@@ -11,6 +11,7 @@ import os
 import time
 import httpx
 from dotenv import load_dotenv
+from job_alerts.core import usage
 from job_alerts.core.db import ROOT
 #--------------------------------------------------------------#
 
@@ -41,6 +42,8 @@ def search(query: str, num: int = 10, retries: int = 3) -> list[dict]:
     else:
         raise RuntimeError("search unavailable after retries")
 
+    returned = len(resp.json().get("results", []))       # Unoblox bills per result returned
+    usage.log_call("unoblox_search", returned, returned * usage.unoblox_price())
     return [{"url": item.get("url") or "",
              "title": item.get("title") or "",
              "snippet": item.get("snippet") or " ".join(item.get("highlights") or [])}

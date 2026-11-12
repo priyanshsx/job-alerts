@@ -7,7 +7,8 @@ import time
 from urllib.parse import unquote, urlparse 
 import httpx 
 from dotenv import load_dotenv
-from job_alerts.core.db import ROOT 
+from job_alerts.core import usage
+from job_alerts.core.db import ROOT
 #--------------------------------------------------------------#
 
 # Global variables 
@@ -46,6 +47,8 @@ def search(query: str, num: int = 20, retries: int = 3) -> list[dict]:
         break 
     else:
         raise RuntimeError("search unavailable after retries")
+    returned = len(resp.json().get("results", []))       # Unoblox bills per result returned
+    usage.log_call("unoblox_search", returned, returned * usage.unoblox_price())
     results = []
     for item in resp.json().get("results", []):
         url = item.get("url") or ""

@@ -8,12 +8,14 @@ from job_alerts.describe import describe
 from job_alerts.classify import classify
 from job_alerts.prioritize import prioritize
 from job_alerts.leads import build_leads
+from job_alerts.core import usage
 from job_alerts.sync import sync
 from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
 from job_alerts.people_sync import people_sync
 from job_alerts.contacts import contacts
+from job_alerts.costs import write_costs
 #--------------------------------------------------------------#
 
 def main():
@@ -33,6 +35,7 @@ def main():
         ("people-digest", "build and send the weekly people email"),
         ("people-sync", "two-way sync between people and the People tab"),
         ("contacts", "find contacts and emails for leads and people ticked in the sheet"),
+        ("costs", "update the Costs tab (spend per week and month, cost per lead)"),
         ("people-run", "find people, send the weekly email, then sync the People tab")
     ]:
         cmd = sub.add_parser(name, help=help_text)
@@ -41,6 +44,7 @@ def main():
             cmd.add_argument("--dry-run", action="store_true", help="save the HTML without sending")
 
     args = parser.parse_args()
+    usage.set_context(args.client, args.command)       # search costs are logged per client and command
 
     if args.command == "fetch":
         collect(args.client)
@@ -76,6 +80,15 @@ def main():
         find_people(args.client)
         send_people_digest(args.client)
         people_sync(args.client)
+    elif args.command == "costs":
+        write_costs(args.client)
+
+    # Runs that spend money also refresh the Costs tab (a problem there never fails the run)
+    if args.command in ("run", "people-run", "contacts"):
+        try:
+            write_costs(args.client)
+        except Exception as e:
+            print(f"[{args.client}] costs tab not updated: {e}")
 
 
 if __name__ == "__main__":

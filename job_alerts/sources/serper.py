@@ -11,6 +11,7 @@ import os
 import time
 import httpx
 from dotenv import load_dotenv
+from job_alerts.core import usage
 from job_alerts.core.db import ROOT
 #--------------------------------------------------------------#
 
@@ -42,6 +43,8 @@ def search(query: str, days: int = 7, num: int = 20, retries: int = 3) -> list[d
             continue
         if resp.status_code >= 400:
             raise RuntimeError(f"Serper {resp.status_code} for {query!r}: {resp.text[:300]}")
+        credits = 1 if payload["num"] <= 10 else 2      # 1 credit per 10 results
+        usage.log_call("serper", credits, credits * usage.serper_price())
         return resp.json().get("organic", [])
     raise RuntimeError("Serper unavailable after retries")
 #--------------------------------------------------------------#
