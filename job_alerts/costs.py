@@ -163,50 +163,56 @@ def write_costs(client: str) -> None:
         return [round(inr / usd_inr, 2), round(inr / eur_inr, 2), round(inr, 2)]
     #--------------------------------------------------------------#
 
-    money_periods = ["This week", "This month", "Last month"]
-    header = ["", *[f"{p} ({c})" for p in money_periods for c in ("USD", "EUR", "INR")]]
+    period_names = list(periods)                     # This week, Last week, This month, Last month
     rows, bold = [], []
 
     def title(text):
         rows.append([text]); bold.append(len(rows))
 
+    def inr(x):
+        return round(x, 2)
+
+    totals = {p: sum(stage_inr(s, periods[p]) for s in STAGES) for p in period_names}
     title(f"Costs: {cfg.display_name}")
-    rows.append([f"Updated {now:%Y-%m-%d %H:%M} UTC. Rates: 1 USD = {usd_inr} INR, 1 EUR = {eur_inr} INR. "
-                 "Actual tool costs only (search APIs, AI); email lookups use free tiers."])
+    all_events = [t for st in STAGES for t, _ in spend[st]]
+    total_so_far = sum(c for st in STAGES for _, c in spend[st])
+    since = f" (since {min(all_events):%d %b %Y})" if all_events else ""
+    rows.append([f"Total spent so far{since}, in INR:", inr(total_so_far)]); bold.append(len(rows))
+    rows.append([f"All amounts are in INR. Updated {now:%Y-%m-%d %H:%M} UTC. Actual tool costs only "
+                 "(search APIs and AI); email lookups use free tiers."])
     if not content_found:
         rows.append(["Note: content-suggester's database wasn't found, so content costs are missing."])
     rows.append([])
 
-    title("Spend")
-    rows.append(header); bold.append(len(rows))
-    totals = {p: sum(stage_inr(s, periods[p]) for s in STAGES) for p in money_periods}
-    rows.append(["Total", *[v for p in money_periods for v in money(totals[p])]])
-    for s in STAGES:
-        rows.append([STAGE_LABELS[s], *[v for p in money_periods for v in money(stage_inr(s, periods[p]))]])
+    title("Spend (INR)")
+    rows.append(["", *period_names]); bold.append(len(rows))
+    rows.append(["Total", *[inr(totals[p]) for p in period_names]])
+    for st in STAGES:
+        rows.append([STAGE_LABELS[st], *[inr(stage_inr(st, periods[p])) for p in period_names]])
     rows.append([])
 
-    title("Cost per result")
-    rows.append(header); bold.append(len(rows))
+    title("Cost per result (INR)")
+    rows.append(["", *period_names]); bold.append(len(rows))
     for label, stage, metric in [("Per lead added", "leads", "leads_added"),
                                  ("Per person found", "people", "people_added"),
                                  ("Per verified email", "contacts", "emails_verified"),
                                  ("Per suggested thread", "content", "threads_suggested")]:
         cells = []
-        for p in money_periods:
+        for p in period_names:
             n = count(metric, periods[p])
-            cells += money(stage_inr(stage, periods[p]) / n) if n else ["-", "-", "-"]
+            cells.append(inr(stage_inr(stage, periods[p]) / n) if n else "-")
         rows.append([label, *cells])
     rows.append([])
 
     title("What it produced")
-    rows.append(["", *periods]); bold.append(len(rows))
+    rows.append(["", *period_names]); bold.append(len(rows))
     for label, metric in [("Job postings collected", "postings_collected"),
                           ("Job postings classified", "postings_classified"),
                           ("Leads added", "leads_added"), ("People found", "people_added"),
                           ("Contacts found", "contacts_found"), ("Verified emails", "emails_verified"),
                           ("Risky emails", "emails_risky"), ("Posts collected", "posts_collected"),
                           ("Threads suggested", "threads_suggested"), ("Requests found", "requests_found")]:
-        rows.append([label, *[count(metric, periods[p]) for p in periods]])
+        rows.append([label, *[count(metric, periods[p]) for p in period_names]])
     rows.append([])
 
     title("Email credits this month (free tiers)")
@@ -218,7 +224,7 @@ def write_costs(client: str) -> None:
         rows.append([provider, used, budget, budget - used])
     rows.append([])
 
-    title("Weekly history (USD)")
+    title("Weekly history (INR)")
     rows.append(["Week", "Leads", "People", "Contacts", "Content", "Total", "Leads added",
                  "Cost per lead", "Verified emails", "Cost per email", "Threads", "Cost per thread"])
     bold.append(len(rows))
@@ -226,12 +232,20 @@ def write_costs(client: str) -> None:
     active = [wk for wk in weeks if any(stage_inr(s, wk) for s in STAGES)
               or any(count(m, wk) for m in volume)]
     for wk in weeks[weeks.index(active[0]):] if active else []:   # from the first week with activity
-        usd = {s: stage_inr(s, wk) / usd_inr for s in STAGES}
+        spent = {s: stage_inr(s, wk) for s in STAGES}
         leads_n, emails_n, threads_n = count("leads_added", wk), count("emails_verified", wk), count("threads_suggested", wk)
-        rows.append([wk[1], *[round(usd[s], 2) for s in STAGES], round(sum(usd.values()), 2), leads_n,
-                     round(usd["leads"] / leads_n, 2) if leads_n else "-", emails_n,
-                     round(usd["contacts"] / emails_n, 2) if emails_n else "-", threads_n,
-                     round(usd["content"] / threads_n, 2) if threads_n else "-"])
+        rows.append([wk[1], *[inr(spent[s]) for s in STAGES], inr(sum(spent.values())), leads_n,
+                     inr(spent["leads"] / leads_n) if leads_n else "-", emails_n,
+                     inr(spent["contacts"] / emails_n) if emails_n else "-", threads_n,
+                     inr(spent["content"] / threads_n) if threads_n else "-"])
+    rows.append([])
+
+    title("Totals in other currencies")
+    rows.append(["", "INR", "USD", "EUR"]); bold.append(len(rows))
+    for label, amount in [("Spent so far", total_so_far), ("This week", totals["This week"]),
+                          ("This month", totals["This month"]), ("Last month", totals["Last month"])]:
+        rows.append([label, inr(amount), round(amount / usd_inr, 2), round(amount / eur_inr, 2)])
+    rows.append([f"Rates used: 1 USD = {usd_inr} INR, 1 EUR = {eur_inr} INR."])
     #--------------------------------------------------------------#
 
     ws = open_worksheet(sheets_cfg["spreadsheet_id"], sheets_cfg.get("costs_tab", "Costs"))
@@ -239,7 +253,7 @@ def write_costs(client: str) -> None:
     ws.update(range_name="A1", values=rows, value_input_option="RAW")
     for r in bold:
         ws.format(f"A{r}:M{r}", {"textFormat": {"bold": True}})
-    print(f"[{client}] costs: tab updated (this month: ${totals['This month'] / usd_inr:.2f} / "
-          f"EUR {totals['This month'] / eur_inr:.2f} / INR {totals['This month']:.0f})")
+    print(f"[{client}] costs: total spent so far INR {total_so_far:,.0f}; this month: ${totals['This month'] / usd_inr:.2f} / "
+          f"EUR {totals['This month'] / eur_inr:.2f} / INR {totals['This month']:.0f}")
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#
