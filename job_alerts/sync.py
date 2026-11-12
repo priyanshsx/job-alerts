@@ -22,6 +22,7 @@ ENGINE_COLUMNS = {                 # filled by the engine; the team should not e
     "Size": "company_size",
     "Links": "links",
     "On team list": "on_team_list",
+    "Lead type": "lead_type",
     "Contact name": "contact_name",        # filled by the contacts command
     "Contact title": "contact_title",
     "Contact LinkedIn": "contact_linkedin",

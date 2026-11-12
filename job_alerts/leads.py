@@ -20,6 +20,12 @@ def _add_source(sources: str | None, source: str) -> str:
 
 # Creates or updates one lead per company from priority 1-2 job postings
 def build_leads(client: str) -> None:
+    from job_alerts.core.config import load_config
+    types = (getattr(load_config(client), "job_alerts", None) or {}).get("lead_types") or {}
+
+    def _lead_type(row):                             # e.g. consultancy -> "Partner (MSSP / SI)"
+        return types.get(row["employer_type"], types.get("default")) if types else None
+
     conn = get_conn()
     client_id = get_client_id(conn, client)
     rows = conn.execute(
@@ -44,11 +50,11 @@ def build_leads(client: str) -> None:
             conn.execute(
                 """INSERT INTO leads (client_id, company_name, name_normalized, country, sources,
                    latest_signal, latest_signal_at, priority, language, company_size, links,
-                   created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   lead_type, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (client_id, r["company_name"], key, r["country"], "job_alert", signal,
                  r["posted_at"], r["priority"], r["language_requirement"], r["company_size"],
-                 r["url"], _now(), _now()),
+                 r["url"], _lead_type(r), _now(), _now()),
             )
             new += 1
             continue
@@ -60,7 +66,8 @@ def build_leads(client: str) -> None:
             signal = f"On your list, now hiring: {r['title']}"
         conn.execute(
             """UPDATE leads SET sources = ?, priority = ?, latest_signal = ?, latest_signal_at = ?,
-               language = ?, company_size = ?, links = ?, updated_at = ? WHERE id = ?""",
+               language = ?, company_size = ?, links = ?, lead_type = COALESCE(lead_type, ?),
+               updated_at = ? WHERE id = ?""",
             (_add_source(lead["sources"], "job_alert"),
              min(p for p in (lead["priority"], r["priority"]) if p is not None),
              signal if is_newer else lead["latest_signal"],
@@ -68,7 +75,7 @@ def build_leads(client: str) -> None:
              r["language_requirement"] if is_newer else lead["language"],
              r["company_size"] if is_newer else lead["company_size"],
              r["url"] if is_newer else lead["links"],
-             _now(), lead["id"]),
+             _lead_type(r), _now(), lead["id"]),
         )
         updated += 1
 

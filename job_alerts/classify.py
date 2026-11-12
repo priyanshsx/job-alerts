@@ -55,7 +55,8 @@ Definitions:
 - is_relevant: {relevance}
 - employer_type:
   manufacturer_supplier = manufacturer or supplier (including pharma and contract manufacturers)
-  consultancy = IT or SAP consultancy, systems integrator or ERP reseller
+  consultancy = IT or SAP consultancy, systems integrator, ERP reseller, IT services firm or
+                managed (security) service provider such as an MSSP or MDR provider
   large_enterprise = large corporation or group with more than {max_employees} employees
   other_industry = insurance, banking, utilities, public sector, retail, healthcare, etc.
   agency = staffing or recruitment agency

@@ -40,6 +40,7 @@ class Listening(Loose):
     job_sources: list[str] = ["ba_jobs"]   # ba_jobs, ats_search, remote_boards
     job_markets: list[str] = []            # ats_search: market words added to every search
     ats_keywords: list[str] = []           # ats_search: its own search terms (default: job_keywords)
+    job_market_groups: list[list[str]] = []   # ats_search: separate market groups (e.g. India, Africa)
 
 class Digest(Loose):
     email_to: list[str]
