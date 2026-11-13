@@ -21,6 +21,7 @@ from job_alerts.core.db import get_conn, get_client_id
 from job_alerts.core.llm import call_llm
 from job_alerts.core.names import normalize_name
 from job_alerts.emails import apollo, hunter, prospeo
+from job_alerts.emails import patterns
 from job_alerts.emails.base import ProviderUnavailable
 from job_alerts.people_sync import people_sync
 from job_alerts.sources import web_search, xray_search
@@ -29,7 +30,8 @@ from job_alerts.sync import sync
 #--------------------------------------------------------------#
 
 # Global variables
-PROVIDERS = {apollo.NAME: apollo, prospeo.NAME: prospeo, hunter.NAME: hunter}
+PROVIDERS = {apollo.NAME: apollo, prospeo.NAME: prospeo, hunter.NAME: hunter,
+             patterns.pattern.NAME: patterns.pattern, patterns.guess.NAME: patterns.guess}
 WAITING = "waiting for credits"   # no provider could be tried yet (missing keys or monthly limits reached)
 NOT_COMPANY_SITES = ("linkedin.", "xing.", "facebook.", "instagram.", "twitter.", "x.com", "youtube.",
                      "wikipedia.", "northdata.", "kununu.", "indeed.", "stepstone.", "glassdoor.",
@@ -142,11 +144,14 @@ def find_contact(cfg, client_id: int, lead, roles: list[str], max_searches: int)
 
 # Credits this client used this month per provider (from the lookup log). Each client's
 # monthly_limit is its own budget; the budgets of all clients should add up to the free tiers.
+SHARED_BUDGETS = {"pattern": ("pattern", "guess"), "guess": ("pattern", "guess")}   # both spend MillionVerifier credits
+
 def credits_used(conn, provider: str, client_id: int) -> int:
     month = datetime.now(timezone.utc).strftime("%Y-%m")
-    row = conn.execute("SELECT COALESCE(SUM(credits), 0) FROM email_lookups WHERE provider = ? "
-                       "AND client_id = ? AND substr(created_at, 1, 7) = ?",
-                       (provider, client_id, month)).fetchone()
+    names = SHARED_BUDGETS.get(provider, (provider,))
+    row = conn.execute(f"SELECT COALESCE(SUM(credits), 0) FROM email_lookups WHERE provider IN "
+                       f"({','.join('?' * len(names))}) AND client_id = ? AND substr(created_at, 1, 7) = ?",
+                       (*names, client_id, month)).fetchone()
     return row[0]
 #--------------------------------------------------------------#
 
@@ -180,6 +185,7 @@ def find_email(conn, client_id: int, person: dict, domain: str | None, providers
                       result.email, result.status, result.credits, result.detail, _now()))
         conn.commit()                                # every lookup is saved straight away (credit tracking)
         if result.email and result.status == "verified":
+            patterns.learn(person.get("full_name"), result.email)   # remember this company's format
             return result.email, "verified", name
         if result.email and best[0] is None:
             best = (result.email, result.status, name)   # keep a risky email as a fallback
