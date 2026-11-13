@@ -55,14 +55,48 @@ def _country(text: str) -> str | None:
     return "REMOTE" if "remote" in t else None
 #--------------------------------------------------------------#
 
+GENERIC_NAMES = {"application", "apply", "jobs", "careers", "job", "career", "job application", ""}
+
+def clean_company(name: str | None) -> str:
+    """'Oracle - Jobs' -> 'Oracle', 'Acme | Careers' -> 'Acme'."""
+    name = re.sub(r"\s*[-|–—]\s*(jobs?|careers?|hiring)\s*$", "", (name or "").strip(), flags=re.I)
+    return name.strip()
+
+def company_from_url(source: str, url: str) -> str:
+    """The company as it appears in a posting's web address, e.g.
+    linkedin.com/jobs/view/soc-analyst-at-zoracom-123 -> 'Zoracom', greenhouse.io/addepar1/jobs/1 -> 'Addepar'."""
+    if source not in SITES:
+        return ""
+    m = SITES[source][1].search(url or "")
+    if not m:
+        return ""
+    slug = m.group(1)
+    if source == "linkedin_jobs":
+        if "-at-" not in slug:
+            return ""
+        slug = slug.rsplit("-at-", 1)[1]
+    slug = re.sub(r"\d+$", "", slug)                    # 'addepar1' -> 'addepar'
+    return slug.replace("-", " ").replace("_", " ").strip().title()
+
+def looks_broken(company: str | None) -> bool:
+    """A stored company name that is really a page title, a slug or a generic word."""
+    c = (company or "").strip()
+    return (c.lower() in GENERIC_NAMES or " At " in c or "%E2" in c or bool(re.search(r"\d$", c))
+            or bool(re.search(r"\s[-|–—]\s*(jobs?|careers?)$", c, flags=re.I)))
+#--------------------------------------------------------------#
+
 # Pull "role" and "company" out of each site's page-title format
 def _title_and_company(site: str, title: str, slug: str) -> tuple[str, str]:
     title = re.sub(r"\s*\|\s*LinkedIn\s*$", "", title or "").strip()
     company_from_slug = slug.replace("-", " ").replace("_", " ").title()
-    if site == "linkedin_jobs":                      # "Acme hiring Head of Content in Bengaluru, India"
-        m = re.match(r"(.+?) hiring (.+?)(?: in (.+))?$", title)
+    if site == "linkedin_jobs":
+        title = re.split(r"\s+[—–]\s+", title)[0].strip()      # drop " — London Area, United Kingdom"
+        m = re.match(r"(.+?) hiring (.+?)(?: in (.+))?$", title)  # "Acme hiring Head of Content in Pune"
         if m:
             return m.group(2).strip(), m.group(1).strip()
+        if " at " in title:                                     # "Head of Content at Acme"
+            role, company = title.rsplit(" at ", 1)
+            return role.strip(), company.strip()
         return title, ""
     if site == "greenhouse":                         # "Job Application for Head of Content at Acme"
         m = re.match(r"(?:Job Application for )?(.+?) at (.+)$", title)
@@ -102,13 +136,16 @@ def fetch(role: str, markets: list[str], days: int = 7, sites: list[str] | None 
                 continue                             # not a single job page (e.g. a company's job list)
             slug, job_id = m.group(1), m.group(2)
             title, company = _title_and_company(site, r.get("title", ""), slug)
+            company = clean_company(company)
+            if looks_broken(company):
+                company = company_from_url(site, url) or company
             snippet = r.get("snippet", "")
             postings.append({
                 "source": site,
                 "external_id": job_id,
                 "url": url.split("?")[0],
                 "title": title,
-                "company_name": company or slug.replace("-", " ").title(),
+                "company_name": company or company_from_url(site, url) or slug.replace("-", " ").title(),
                 "location": None,
                 "country": _country(f"{r.get('title', '')} {snippet}"),
                 "posted_at": r.get("date"),

@@ -33,8 +33,14 @@ def search(query: str, days: int = 7, num: int = 20, retries: int = 3) -> list[d
                            "(copy it from content-suggester's .env)")
     payload = {"q": query, "tbs": f"qdr:{period_for(days)}", "num": num}
     for attempt in range(retries):
-        resp = httpx.post(SERPER_URL, json=payload, timeout=30,
-                          headers={"X-API-KEY": key, "Content-Type": "application/json"})
+        try:
+            resp = httpx.post(SERPER_URL, json=payload, timeout=60,
+                              headers={"X-API-KEY": key, "Content-Type": "application/json"})
+        except httpx.HTTPError as e:                  # timeout or connection problem: wait and retry
+            if attempt == retries - 1:
+                raise RuntimeError(f"Serper unreachable for {query!r}: {e or type(e).__name__}")
+            time.sleep(2 ** attempt)
+            continue
         if resp.status_code in (429, 502, 503):
             time.sleep(2 ** attempt)
             continue

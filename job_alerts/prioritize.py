@@ -34,15 +34,19 @@ def prioritize(client: str) -> None:
 
     conn = get_conn()
     client_id = get_client_id(conn, client)
+    listening = getattr(cfg, "listening", None)
+    blocked = [b.lower() for b in (getattr(listening, "job_exclude_companies", None) or [])]
     rows = conn.execute(
-        f"SELECT id, {', '.join(RULE_COLUMNS)} FROM job_postings "
+        f"SELECT id, company_name, {', '.join(RULE_COLUMNS)} FROM job_postings "
         "WHERE client_id = ? AND is_relevant = 1",
         (client_id,),
     ).fetchall()
 
     counts = {}
     for r in rows:
-        if any(r[col] in values for col, values in exclude.items()):
+        if any(b in (r["company_name"] or "").lower() for b in blocked):
+            priority = None                                   # on the client's exclude list
+        elif any(r[col] in values for col, values in exclude.items()):
             priority = None                                   # excluded: never sent
         else:
             priority = next((rule["priority"] for rule in rules if _matches(r, rule)), None)
