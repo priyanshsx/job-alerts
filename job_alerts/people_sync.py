@@ -108,7 +108,7 @@ def people_sync(client: str) -> None:
     conn.commit()
 
     people = conn.execute(
-        "SELECT * FROM people WHERE client_id = ? ORDER BY created_at, priority",
+        "SELECT * FROM people WHERE client_id = ? ORDER BY created_at DESC, priority",
         (client_id,),
     ).fetchall()
     #--------------------------------------------------------------#
@@ -139,7 +139,7 @@ def people_sync(client: str) -> None:
         row[col["Status"]] = "to connect"
         new_rows.append(row)
     if new_rows:
-        ws.append_rows(new_rows, value_input_option="RAW")
+        ws.insert_rows(new_rows, row=2, value_input_option="RAW")      # newest at the top, under the header
 
     conn.close()
     print(f"[{client}] people sync: pulled {len(in_sheet)} rows, updated {len(updates)} cells, "

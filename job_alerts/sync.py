@@ -34,11 +34,9 @@ TEAM_COLUMNS = {                   # edited by the team; the engine only reads t
     "Owner": "owner",
     "Next step": "next_step",
     "Next step date": "next_step_date",
-    "Promising": "promising",
     "Notes": "notes",
     "Last updated": "last_updated",
     "Find contact": "find_contact",        # Monday tick: find a contact and email for this lead
-    "Contact role": "contact_role",        # optional: who to look for, e.g. "Head of IT"
 }
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
 #--------------------------------------------------------------#
@@ -98,16 +96,15 @@ def sync(client: str) -> None:
 
     # 1. Pull: copy the team's columns into the database
     for lead_id, (_, row) in in_sheet.items():
-        promising = cell(row, "Promising").upper() in ("TRUE", "YES", "1", "X")
         conn.execute(
             """UPDATE leads SET status = ?, owner = ?, next_step = ?, next_step_date = ?,
-               promising = ?, notes = ?, last_updated = ?, find_contact = ?, contact_role = ?
+               notes = ?, last_updated = ?, find_contact = ?
                WHERE id = ? AND client_id = ?""",
             (cell(row, "Status") or "new", cell(row, "Owner") or None,
              cell(row, "Next step") or None, cell(row, "Next step date") or None,
-             int(promising), cell(row, "Notes") or None, cell(row, "Last updated") or None,
+             cell(row, "Notes") or None, cell(row, "Last updated") or None,
              int(cell(row, "Find contact").upper() in ("TRUE", "YES", "1", "X")),
-             cell(row, "Contact role") or None, lead_id, client_id),
+             lead_id, client_id),
         )
     conn.commit()
     #--------------------------------------------------------------#
@@ -145,7 +142,7 @@ def sync(client: str) -> None:
         row[col["Status"]] = "new"
         new_rows.append(row)
     if new_rows:
-        ws.append_rows(new_rows, value_input_option="RAW")
+        ws.insert_rows(new_rows, row=2, value_input_option="RAW")      # newest at the top, under the header
 
     conn.close()
     print(f"[{client}] sync: pulled {len(in_sheet)} rows, updated {len(updates)} cells, "
