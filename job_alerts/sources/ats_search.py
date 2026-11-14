@@ -118,14 +118,15 @@ def _title_and_company(site: str, title: str, slug: str) -> tuple[str, str]:
 #--------------------------------------------------------------#
 
 # Search one role on every site; returns postings in the standard shape used by collect.py
-def fetch(role: str, markets: list[str], days: int = 7, sites: list[str] | None = None) -> list[dict]:
+def fetch(role: str, markets: list[str], days: int = 7, sites: list[str] | None = None,
+          num: int = 20) -> list[dict]:
     market_filter = " OR ".join(f'"{m}"' for m in markets)
     postings = []
     for site in sites or list(SITES):
         site_filter, pattern = SITES[site]
         query = f'{site_filter} "{role}"' + (f" ({market_filter})" if markets else "")
         try:
-            results = serper.search(query, days=days)
+            results = serper.search(query, days=days, num=num)
         except RuntimeError as e:
             print(f"    {site}: {e}")
             continue

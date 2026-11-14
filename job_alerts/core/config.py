@@ -42,6 +42,8 @@ class Listening(Loose):
     ats_keywords: list[str] = []           # ats_search: its own search terms (default: job_keywords)
     job_market_groups: list[list[str]] = []   # ats_search: separate market groups (e.g. India, Africa)
     watchlist: list[str] = []              # companies checked every run for any security posting
+    ats_sites: list[str] = []              # ats_search: only these job sites (default: all)
+    ats_results: int = 20                  # ats_search: results per search (10 = 1 Serper credit, 20 = 2)
 
 class Digest(Loose):
     email_to: list[str]

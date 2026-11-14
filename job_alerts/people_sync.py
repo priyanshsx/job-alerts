@@ -4,7 +4,9 @@
 # File: job_alerts/people_sync.py
 # Purpose: two-way sync between the people table and the People tab of the client's Google Sheet.
 #          Pull: your Status and Note go into the database.
-#          Push: new people are appended; changed engine cells are updated.
+#          Push: new people go in at row 2 (newest at the top); changed engine cells are updated.
+#          to_top: people (e.g. from the Manual Lookup tab) moved to row 2 even if already in the tab,
+#          keeping your Status, Note and ticks.
 #          Columns are found by header name. Your columns are never overwritten.
 #--------------------------------------------------------------#
 
@@ -39,7 +41,7 @@ TEAM_COLUMNS = {                   # edited by you; the tool only reads these
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
 SOURCE_LABELS = {"job_alerts_company": "company hiring now", "title_search": "role search",
                  "lead_contact": "contact for a lead",
-                 "requester": "asked for help"}
+                 "requester": "asked for help", "manual_lookup": "manual lookup"}
 #--------------------------------------------------------------#
 
 # Format one engine value for the sheet
@@ -67,7 +69,7 @@ def _ensure_headers(ws, values: list[list[str]]) -> list[str]:
 #--------------------------------------------------------------#
 
 # Two-way sync for one client's People tab
-def people_sync(client: str) -> None:
+def people_sync(client: str, to_top: list[int] | None = None) -> None:
     cfg = load_config(client)
     sheets_cfg = getattr(cfg, "sheets", None)
     if not sheets_cfg or not sheets_cfg.get("spreadsheet_id"):
@@ -95,14 +97,15 @@ def people_sync(client: str) -> None:
     conn = get_conn()
     client_id = get_client_id(conn, client)
 
-    # 1. Pull: copy your columns into the database
+    # 1. Pull: copy your columns into the database (to_top people keep the tick the lookup gave them)
+    to_top = [i for i in dict.fromkeys(to_top or [])]          # pasted order, no repeats
     for person_id, (_, row) in in_sheet.items():
+        ticked = int(cell(row, "Find email").upper() in ("TRUE", "YES", "1", "X"))
         conn.execute(
-            "UPDATE people SET connection_status = ?, note = ?, last_updated = ?, find_email = ? "
-            "WHERE id = ? AND client_id = ?",
+            "UPDATE people SET connection_status = ?, note = ?, last_updated = ?, "
+            "find_email = CASE WHEN ? THEN find_email ELSE ? END WHERE id = ? AND client_id = ?",
             (cell(row, "Status").lower() or None, cell(row, "Note") or None,
-             cell(row, "Last updated") or None,
-             int(cell(row, "Find email").upper() in ("TRUE", "YES", "1", "X")),
+             cell(row, "Last updated") or None, int(person_id in to_top), ticked,
              person_id, client_id),
         )
     conn.commit()
@@ -116,7 +119,7 @@ def people_sync(client: str) -> None:
     # 2. Push updates: rewrite only engine cells whose value changed
     updates = []
     for person in people:
-        if person["id"] not in in_sheet:
+        if person["id"] not in in_sheet or person["id"] in to_top:
             continue
         row_number, row = in_sheet[person["id"]]
         for header in ENGINE_COLUMNS:
@@ -128,21 +131,32 @@ def people_sync(client: str) -> None:
         ws.batch_update(updates, value_input_option="RAW")
     #--------------------------------------------------------------#
 
-    # 3. Push new people: append rows, with Status set to "to connect"
+    # 3. People moved to the top: remove their current rows (bottom first, so row numbers hold)
+    moved = sorted((in_sheet[i][0] for i in to_top if i in in_sheet), reverse=True)
+    for row_number in moved:
+        ws.delete_rows(row_number)
+    #--------------------------------------------------------------#
+
+    # 4. Push new people at row 2: the to_top people first (with your columns kept), then the rest
+    by_id = {p["id"]: p for p in people}
+    order = [by_id[i] for i in to_top if i in by_id] + \
+            [p for p in people if p["id"] not in in_sheet and p["id"] not in to_top]
     new_rows = []
-    for person in people:
-        if person["id"] in in_sheet:
-            continue
+    for person in order:
         row = [""] * len(headers)
         for header in ENGINE_COLUMNS:
             row[col[header]] = _engine_value(header, person)
-        row[col["Status"]] = "to connect"
+        row[col["Status"]] = person["connection_status"] or "to connect"
+        if person["id"] in to_top:
+            row[col["Note"]] = person["note"] or ""
+            row[col["Last updated"]] = person["last_updated"] or ""
+            row[col["Find email"]] = bool(person["find_email"])   # a real tick, so a retry still happens
         new_rows.append(row)
     if new_rows:
         ws.insert_rows(new_rows, row=2, value_input_option="RAW")      # newest at the top, under the header
 
     conn.close()
     print(f"[{client}] people sync: pulled {len(in_sheet)} rows, updated {len(updates)} cells, "
-          f"added {len(new_rows)} people (tab '{tab}')")
+          f"added {len(new_rows) - len(moved)} people, moved {len(moved)} to the top (tab '{tab}')")
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

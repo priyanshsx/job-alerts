@@ -6,6 +6,8 @@
 #          Leads tab, "Find contact" ticked  -> find the company's domain, the most relevant
 #                                               person, and their email
 #          People tab, "Find email" ticked   -> find that person's email
+#          Manual Lookup tab, pasted links      -> find the person and their email, add them to the
+#                                               People tab at row 2, then clear the link
 #          Syncs before (to read the ticks) and after (to show the results). Nothing is
 #          ever looked up twice, so re-running is safe.
 #--------------------------------------------------------------#
@@ -23,6 +25,7 @@ from job_alerts.core.names import normalize_name
 from job_alerts.emails import apollo, hunter, prospeo
 from job_alerts.emails import patterns
 from job_alerts.emails.base import ProviderUnavailable
+from job_alerts import manual_lookup
 from job_alerts.people_sync import people_sync
 from job_alerts.sources import web_search, xray_search
 from job_alerts.sources.xray_search import normalize_linkedin_url
@@ -294,7 +297,13 @@ def contacts(client: str) -> None:
         print(f"    email: {email or status}")
     #--------------------------------------------------------------#
 
+    # 3. Links pasted in the Manual Lookup tab
+    lookup_ids = manual_lookup.run_lookups(conn, cfg, client_id, find_domain, find_email, providers,
+                                           unavailable, WAITING)
+    #--------------------------------------------------------------#
+
     # Summary and credit warnings
+    print(f"[{client}] manual lookups: {len(lookup_ids)}")
     print(f"[{client}] contacts: {stats['leads']} leads checked, {stats['contacts']} contacts found, "
           f"{stats['lead_emails']} lead emails; {stats['people']} people checked, "
           f"{stats['people_emails']} emails")
@@ -307,6 +316,19 @@ def contacts(client: str) -> None:
     conn.close()
 
     sync(client)                                     # show the results in the sheet
-    people_sync(client)
+    people_sync(client, to_top=lookup_ids)
+#--------------------------------------------------------------#
+
+# Only the Manual Lookup tab (quicker than the full contacts command)
+def lookup(client: str) -> None:
+    people_sync(client)                              # read your latest Status / Note / ticks first
+    cfg = load_config(client)
+    providers = (getattr(cfg, "contacts", None) or {}).get("email_providers", [])
+    conn = get_conn()
+    client_id = get_client_id(conn, client)
+    ids = manual_lookup.run_lookups(conn, cfg, client_id, find_domain, find_email, providers, set(), WAITING)
+    conn.close()
+    print(f"[{client}] manual lookups: {len(ids)}")
+    people_sync(client, to_top=ids)
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

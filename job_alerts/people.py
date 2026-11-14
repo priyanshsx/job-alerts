@@ -67,6 +67,13 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
     company_queries = []
     region_queries = []
 #--------------------------------------------------------------#
+    # 0. Every target title at the watchlist companies, hiring or not (never cut by the caps below)
+    watchlist_queries = []
+    for company in (getattr(getattr(cfg, "listening", None), "watchlist", None) or []):
+        for title in titles:
+            watchlist_queries.append((f'{title} at {company}', 1, company))
+    #--------------------------------------------------------------#
+
     # 1. Target titles at companies from recent job alerts (only the employer types we care about most)
     if pf.get("from_job_alerts", True):
         since = (_now() - timedelta(days=14)).isoformat()
@@ -83,11 +90,6 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
                 company_queries.append((f'{title} at {row["company_name"]}', 1, row["company_name"]))
     #--------------------------------------------------------------#
 
-    # 1b. Target titles at the watchlist companies, hiring or not
-    for company in (getattr(getattr(cfg, "listening", None), "watchlist", None) or []):
-        for title in titles[:COMPANY_TITLES]:
-            company_queries.append((f'{title} at {company}', 1, company))
-
     # 2. Titles × locations × industries: broader reach, still on target
     industries = pf.get("industries") or [""]
     for title in titles:
@@ -102,6 +104,7 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
         "SELECT query FROM people_searches WHERE client_id = ? AND run_at >= ?",
         (client_id, cutoff),
     )}
+    watchlist_queries = [q for q in watchlist_queries if q[0] not in recent]
     company_queries = [q for q in company_queries if q[0] not in recent]
     region_queries = [q for q in region_queries if q[0] not in recent]
     #--------------------------------------------------------------#
@@ -109,7 +112,8 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
     # Company searches first (capped), then fill the rest of the run with region searches
     random.shuffle(region_queries)
     company_queries = company_queries[: pf.get("max_company_searches", 10)]
-    return (company_queries + region_queries)[: pf.get("max_searches_per_run", 30)]
+    others = (company_queries + region_queries)[: pf.get("max_searches_per_run", 30)]
+    return watchlist_queries + others
 #--------------------------------------------------------------#
 
 def find_people(client: str) -> None:

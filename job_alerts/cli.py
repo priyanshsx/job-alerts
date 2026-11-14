@@ -14,7 +14,7 @@ from job_alerts.digest import send_digest
 from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
 from job_alerts.people_sync import people_sync
-from job_alerts.contacts import contacts
+from job_alerts.contacts import contacts, lookup
 from job_alerts.costs import write_costs
 #--------------------------------------------------------------#
 
@@ -35,6 +35,7 @@ def main():
         ("people-digest", "build and send the weekly people email"),
         ("people-sync", "two-way sync between people and the People tab"),
         ("contacts", "find contacts and emails for leads and people ticked in the sheet"),
+        ("lookup", "find emails for the LinkedIn links pasted in the Manual Lookup tab"),
         ("costs", "update the Costs tab (spend per week and month, cost per lead)"),
         ("people-run", "find people, send the weekly email, then sync the People tab")
     ]:
@@ -76,6 +77,8 @@ def main():
         people_sync(args.client)
     elif args.command == "contacts":
         contacts(args.client)
+    elif args.command == "lookup":
+        lookup(args.client)
     elif args.command == "people-run":
         find_people(args.client)
         send_people_digest(args.client)
