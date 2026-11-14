@@ -26,9 +26,12 @@ def _fetch(source: str, cfg, days: int) -> list[dict]:
         ats_keywords = cfg.listening.ats_keywords or keywords
         groups = cfg.listening.job_market_groups or [cfg.listening.job_markets]
         return [p for k in ats_keywords for g in groups for p in ats_search.fetch(k, g, days=days)]
+    if source == "watchlist":                       # any security posting at these companies
+        words = ["security", "SOC", "SIEM", "incident response", "cyber"]
+        return [p for c in cfg.listening.watchlist for p in ats_search.fetch(c, words, days=days)]
     if source == "remote_boards":
         return remote_boards.fetch(days=days)
-    raise ValueError(f"Unknown job source {source!r}. Allowed: ba_jobs, ats_search, remote_boards")
+    raise ValueError(f"Unknown job source {source!r}. Allowed: ba_jobs, ats_search, watchlist, remote_boards")
 #--------------------------------------------------------------#
 
 # Collects job listings and inserts into database

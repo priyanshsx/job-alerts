@@ -15,7 +15,7 @@ from job_alerts.sources import serper
 
 # Global variables: site -> (Google "site:" filter, pattern for a single job page)
 SITES = {
-    "greenhouse": ("(site:boards.greenhouse.io OR site:job-boards.greenhouse.io)",
+    "greenhouse": ("(site:boards.greenhouse.io OR site:job-boards.greenhouse.io OR site:job-boards.eu.greenhouse.io)",
                    re.compile(r"greenhouse\.io/([^/?#]+)/jobs/(\d+)")),
     "lever": ("site:jobs.lever.co", re.compile(r"jobs\.lever\.co/([^/?#]+)/([0-9a-f-]{20,})")),
     "ashby": ("site:jobs.ashbyhq.com", re.compile(r"jobs\.ashbyhq\.com/([^/?#]+)/([0-9a-f-]{20,})")),

@@ -8,7 +8,7 @@ from job_alerts.core.db import get_conn, get_client_id
 
 # Columns that exclude and priority rules are allowed to check
 RULE_COLUMNS = ["employer_type", "role_type", "language_requirement",
-                "company_size", "supplies_anchor_customer", "business_model"]
+                "company_size", "supplies_anchor_customer", "business_model", "vertical"]
 #--------------------------------------------------------------#
 
 def _check_columns(conditions: dict, where: str) -> None:

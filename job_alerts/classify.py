@@ -29,6 +29,8 @@ class PostingClassification(BaseModel):
     supplies_anchor_customer: bool
     supplier_evidence: str | None = None
     business_model: Literal["b2b", "b2c", "both", "unknown"] = "unknown"
+    vertical: Literal["trading", "crypto", "payments", "fintech_other", "software", "ecommerce",
+                      "pharma", "healthtech", "other"] = "other"
     priority: int = Field(ge=1, le=3)
     reason: str
 #--------------------------------------------------------------#
@@ -65,6 +67,11 @@ Definitions:
   contract), lead (team lead or head of a function), routine (ongoing specialist or individual
   contributor work).
 - business_model: who the company sells to: b2b (businesses), b2c (consumers), both, or unknown.
+- vertical: the company's main business: trading (stock brokers, algorithmic, high-frequency or
+  proprietary trading firms), crypto (exchanges, crypto payments, wallets), payments (processors,
+  gateways, cards, remittance), fintech_other (lending, neobanks, wealth, insurtech), software
+  (software product, SaaS or software development companies), ecommerce, pharma, healthtech
+  (including telemedicine), or other.
 - language_requirement:
   english_ok = English is the working language, OR the posting asks for English and the local
                language, OR the posting is written in English and does not demand the local language
@@ -151,12 +158,12 @@ def classify(client: str) -> None:
             """UPDATE job_postings SET is_relevant = ?, employer_type = ?, role_type = ?,
                erp_system = ?, segment = ?, language_requirement = ?, company_size = ?,
                employee_estimate = ?, named_customers = ?, supplies_anchor_customer = ?,
-               supplier_evidence = ?, business_model = ?, priority = ?, reason = ?, classified_at = ?
+               supplier_evidence = ?, business_model = ?, vertical = ?, priority = ?, reason = ?, classified_at = ?
                WHERE id = ?""",
             (int(result.is_relevant), result.employer_type, result.role_type,
              result.erp_system, result.segment, result.language_requirement,
              result.company_size, result.employee_estimate, ", ".join(customers),
-             int(supplies_anchor), evidence, result.business_model, result.priority, result.reason,
+             int(supplies_anchor), evidence, result.business_model, result.vertical, result.priority, result.reason,
              datetime.now(timezone.utc).isoformat(), row["id"]),
         )
         conn.commit()

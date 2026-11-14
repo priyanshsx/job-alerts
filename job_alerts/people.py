@@ -83,6 +83,11 @@ def _build_queries(cfg, conn, client_id) -> list[tuple[str, int, str | None]]:
                 company_queries.append((f'{title} at {row["company_name"]}', 1, row["company_name"]))
     #--------------------------------------------------------------#
 
+    # 1b. Target titles at the watchlist companies, hiring or not
+    for company in (getattr(getattr(cfg, "listening", None), "watchlist", None) or []):
+        for title in titles[:COMPANY_TITLES]:
+            company_queries.append((f'{title} at {company}', 1, company))
+
     # 2. Titles × locations × industries: broader reach, still on target
     industries = pf.get("industries") or [""]
     for title in titles:
