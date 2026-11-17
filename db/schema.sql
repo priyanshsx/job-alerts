@@ -277,6 +277,8 @@ CREATE TABLE IF NOT EXISTS outreach (
     follow_up_sent_at TEXT,
     follow_up_message_id TEXT,
     replied_at TEXT,
+    alerted_at TEXT,
+    follow_up_alerted_at TEXT,
     reply_label TEXT,
     reply_text TEXT,
     error TEXT,
@@ -305,4 +307,13 @@ CREATE TABLE IF NOT EXISTS do_not_contact (
     client_id INTEGER,
     reason TEXT,                -- unsubscribe, not_interested, bounced, manual
     added_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS outreach_alerts (
+    id INTEGER PRIMARY KEY,
+    client_id INTEGER,
+    slot TEXT,                  -- e.g. "2026-11-18 09:00" (alert time zone)
+    items TEXT,                 -- outreach ids in the alert
+    sent_at TEXT,
+    UNIQUE (client_id, slot)
 );

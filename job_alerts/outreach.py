@@ -10,6 +10,9 @@
 #                   reads replies, picks up your approvals, and sends at most ONE email per run,
 #                   within the daily limit, on weekdays, in the recipient's working hours.
 #                   A reply stops the follow-up. You answer interested replies yourself.  <- step 3
+#   Manual mode (outreach.mode: manual, e.g. Vizcorn): nothing is sent by code. Instead, at set
+#   hours you get an alert email with the next drafts (subject + body + an "Open in Outlook" link);
+#   you send them yourself and tick "Sent by me" in the Outreach tab. Replies: pick a Reply label.
 #   Everything (drafts, your edits, sends, replies and their labels) is kept in the database,
 #   so templates can be compared later.
 #--------------------------------------------------------------#
@@ -22,7 +25,9 @@ from zoneinfo import ZoneInfo
 from gspread.utils import rowcol_to_a1
 from pydantic import BaseModel
 from job_alerts import outreach_mail
+from urllib.parse import quote
 from job_alerts.core.config import load_config
+from job_alerts.core.email import send_email
 from job_alerts.core.db import get_conn, get_client_id
 from job_alerts.core.llm import call_llm
 from job_alerts.core.sheets import open_worksheet
@@ -49,7 +54,14 @@ DEFAULTS = {
     "follow_up_after_days": 4,        # working days after the first email
     "send_to_risky": False,           # only send to verified emails
     "opt_out_line": 'If this isn\'t relevant, just reply "no" and I won\'t email again.',
+    "mode": "auto",                   # auto: the engine sends; manual: alerts only, you send
+    "alert_to": [],                   # manual: who gets the alerts
+    "alert_hours": [9, 12, 15],       # manual: alert times, Monday to Friday
+    "alert_timezone": "Europe/Berlin",
+    "per_alert": 2,                   # manual: drafts per alert
+    "alert_grace_hours": 3,           # manual: a missed alert (Mac asleep) still goes out this long after
 }
+REPLY_LABELS = ("interested", "question", "not_now", "not_interested", "unsubscribe", "out_of_office", "other")
 SENT_LIKE = ("sent", "followed_up")
 #--------------------------------------------------------------#
 
@@ -154,6 +166,10 @@ def _lead_status(row) -> str:
         return "draft ready: approve in Outreach tab"
     if s == "approved":
         return "approved: queued to send"
+    if s == "alerted":
+        return f"in your alert of {row['alerted_at'][:10]}: send it"
+    if s == "follow_up_alerted":
+        return f"follow-up in your alert of {row['follow_up_alerted_at'][:10]}: send it"
     if s == "sent":
         return f"sent {row['sent_at'][:10]}"
     if s == "followed_up":
@@ -244,6 +260,14 @@ TAB_EDITABLE = {"Subject": "subject", "Email": "body", "Follow-up": "follow_up_b
 TAB_HEADERS = ["Outreach ID", "Company", "To", "Contact", "Type", "Signal", "Link", "Subject",
                "Email", "Follow-up", "Approve", "Status", "Sent", "Follow-up sent", "Reply label", "Reply"]
 
+MANUAL_TICKS = {"Sent by me": "sent_at", "Follow-up sent by me": "follow_up_sent_at"}
+
+def _tab_headers(settings: dict) -> list[str]:
+    if settings["mode"] != "manual":
+        return TAB_HEADERS
+    i = TAB_HEADERS.index("Status")
+    return TAB_HEADERS[:i] + list(MANUAL_TICKS) + TAB_HEADERS[i:]
+
 def _cell_value(header: str, row) -> str:
     value = row[TAB_ENGINE.get(header) or TAB_EDITABLE[header]]
     if value is None:
@@ -256,7 +280,7 @@ def sync_tab(client: str) -> None:
     ws = open_worksheet(cfg.sheets["spreadsheet_id"], settings["outreach_tab"])
     values = ws.get_all_values()
     headers = values[0] if values else []
-    missing = [h for h in TAB_HEADERS if h not in headers]
+    missing = [h for h in _tab_headers(settings) if h not in headers]
     if missing:
         headers = headers + missing
         if len(headers) > ws.col_count:
@@ -278,6 +302,9 @@ def sync_tab(client: str) -> None:
     # 1. Pull your edits and approvals (only while the email hasn't gone out)
     for oid, (_, r) in in_sheet.items():
         row = conn.execute("SELECT * FROM outreach WHERE id = ? AND client_id = ?", (oid, client_id)).fetchone()
+        if row and settings["mode"] == "manual":
+            _pull_manual(conn, client_id, row, lambda h: cell(r, h) if h in col else "")
+            row = conn.execute("SELECT * FROM outreach WHERE id = ?", (oid,)).fetchone()
         if not row or row["status"] not in ("drafted", "approved"):
             continue
         approved = cell(r, "Approve").upper() in ("TRUE", "YES", "1", "X")
@@ -318,6 +345,26 @@ def sync_tab(client: str) -> None:
         ws.insert_rows(new_rows, row=2, value_input_option="RAW")
     conn.close()
     print(f"[{client}] outreach tab: {len(updates)} cells updated, {len(new_rows)} new drafts")
+#--------------------------------------------------------------#
+
+# Manual mode: your "Sent by me" ticks and Reply labels from the Outreach tab
+def _pull_manual(conn, client_id: int, row, cell) -> None:
+    ticked = lambda h: cell(h).upper() in ("TRUE", "YES", "1", "X")
+    now = _now().isoformat()
+    if ticked("Sent by me") and not row["sent_at"] and row["status"] in ("approved", "alerted"):
+        conn.execute("UPDATE outreach SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?",
+                     (now, now, row["id"]))
+    if ticked("Follow-up sent by me") and not row["follow_up_sent_at"] and row["status"] in ("sent", "follow_up_alerted"):
+        conn.execute("UPDATE outreach SET status = 'followed_up', follow_up_sent_at = ?, updated_at = ? WHERE id = ?",
+                     (now, now, row["id"]))
+    label = cell("Reply label").strip().lower().replace(" ", "_")
+    if label in REPLY_LABELS and label != (row["reply_label"] or ""):
+        status = "replied" if label != "out_of_office" else row["status"]
+        conn.execute("UPDATE outreach SET reply_label = ?, status = ?, replied_at = COALESCE(replied_at, ?), "
+                     "updated_at = ? WHERE id = ?", (label, status, now, now, row["id"]))
+        if label in ("unsubscribe", "not_interested"):
+            _block(conn, client_id, row["to_email"], label)
+    _refresh_lead(conn, conn.execute("SELECT * FROM outreach WHERE id = ?", (row["id"],)).fetchone())
 #--------------------------------------------------------------#
 
 # Read replies and bounces; a reply stops the follow-up
@@ -442,13 +489,102 @@ def send_next(client: str, cfg, settings: dict, conn, client_id: int) -> str:
     return "nothing due in a recipient's working hours"
 #--------------------------------------------------------------#
 
+# Manual mode: the alert email (one block per draft, ready to copy or open in Outlook)
+def _alert_html(cfg, settings: dict, items: list[tuple[str, object]], footer: str, conn) -> str:
+    esc = lambda t: (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    blocks = []
+    for n, (step, row) in enumerate(items, start=1):
+        lead = conn.execute("SELECT contact_title, contact_linkedin FROM leads WHERE id = ?", (row["lead_id"],)).fetchone()
+        follow = step == "follow_up"
+        subject = f"Re: {row['subject']}" if follow else row["subject"]
+        body = (row["follow_up_body"] if follow else row["body"]).strip() + footer
+        mailto = f"mailto:{row['to_email']}?subject={quote(subject)}&body={quote(body)}"
+        who = " · ".join(x for x in (row["to_name"], lead and lead["contact_title"]) if x)
+        linkedin = f' · <a href="{lead["contact_linkedin"]}">LinkedIn</a>' if lead and lead["contact_linkedin"] else ""
+        why = esc(row["signal"]) + (f' (<a href="{row["link"]}">source</a>)' if row["link"] else "")
+        note = (f"<p style='color:#a15c00'>Follow-up: send it as a <b>reply</b> to your first email "
+                f"(search your Sent folder for \"{esc(row['subject'])}\").</p>") if follow else ""
+        blocks.append(f"""
+<div style="border:1px solid #ddd;border-radius:8px;padding:14px 16px;margin:0 0 18px">
+  <div style="font-size:15px"><b>{n}. {esc(row['company'])}</b>{' — follow-up' if follow else ''}</div>
+  <div style="color:#555;margin:4px 0 10px">{esc(who)}{linkedin}<br>Why now: {why}</div>
+  {note}
+  <div><b>To:</b> {esc(row['to_email'])}</div>
+  <div style="margin:6px 0"><b>Subject:</b> {esc(subject)}</div>
+  <pre style="white-space:pre-wrap;font-family:inherit;background:#f7f7f7;padding:10px;border-radius:6px">{esc(body)}</pre>
+  <a href="{mailto}" style="display:inline-block;padding:8px 14px;background:#0f6cbd;color:#fff;border-radius:6px;text-decoration:none">Open in Outlook</a>
+</div>""")
+    sheet = f"https://docs.google.com/spreadsheets/d/{cfg.sheets['spreadsheet_id']}"
+    return (f"<div style='font-family:Arial,sans-serif;max-width:680px'>{''.join(blocks)}"
+            f"<p>After sending, tick <b>Sent by me</b> (or <b>Follow-up sent by me</b>) in the "
+            f"<a href='{sheet}'>Outreach tab</a>. Got a reply? Pick a <b>Reply label</b> there.</p></div>")
+
+def run_alerts(client: str, cfg, settings: dict, conn, client_id: int, test: bool = False) -> str:
+    now = _now()
+    local = now.astimezone(ZoneInfo(settings["alert_timezone"]))
+    slots = [h for h in settings["alert_hours"] if h <= local.hour]
+    if not test:
+        if local.weekday() >= 5 or not slots:
+            return "no alert due (outside alert hours)"
+        slot = f"{local.date().isoformat()} {max(slots):02d}:00"
+        if local.hour >= max(slots) + settings["alert_grace_hours"]:
+            return "no alert due (missed slot)"
+        if conn.execute("SELECT 1 FROM outreach_alerts WHERE client_id = ? AND slot = ?", (client_id, slot)).fetchone():
+            return f"alert for {slot} already sent"
+
+    items = []
+    for row in conn.execute("SELECT * FROM outreach WHERE client_id = ? AND status = 'sent' AND follow_up_alerted_at IS NULL "
+                            "AND COALESCE(follow_up_body, '') != '' ORDER BY sent_at", (client_id,)).fetchall():
+        if _working_days_since(row["sent_at"], row["timezone"], now) >= settings["follow_up_after_days"] \
+                and not _blocked(conn, row["to_email"]):
+            items.append(("follow_up", row))
+    for row in conn.execute("SELECT * FROM outreach WHERE client_id = ? AND status = 'approved' AND alerted_at IS NULL "
+                            "ORDER BY approved_at", (client_id,)).fetchall():
+        if not _blocked(conn, row["to_email"]):
+            items.append(("first", row))
+    items = items[: settings["per_alert"]]
+    if not items:
+        return "no alert: nothing approved and waiting"
+
+    signature = settings.get("signature", "").strip()
+    footer = f"\n\n{signature}\n\n{settings['opt_out_line']}" if signature else f"\n\n{settings['opt_out_line']}"
+    html = _alert_html(cfg, settings, items, footer, conn)
+    title = f"{'[TEST] ' if test else ''}{cfg.display_name}: {len(items)} email{'s' if len(items) > 1 else ''} to send — " \
+            + ", ".join(r["company"] for _, r in items)
+    send_email(title, html, settings["alert_to"])
+    if test:
+        return f"test alert sent to {', '.join(settings['alert_to'])}"
+
+    stamp = now.isoformat()
+    for step, row in items:
+        if step == "first":
+            conn.execute("UPDATE outreach SET status = 'alerted', alerted_at = ?, updated_at = ? WHERE id = ?",
+                         (stamp, stamp, row["id"]))
+        else:
+            conn.execute("UPDATE outreach SET status = 'follow_up_alerted', follow_up_alerted_at = ?, updated_at = ? "
+                         "WHERE id = ?", (stamp, stamp, row["id"]))
+        _refresh_lead(conn, conn.execute("SELECT * FROM outreach WHERE id = ?", (row["id"],)).fetchone())
+    conn.execute("INSERT INTO outreach_alerts (client_id, slot, items, sent_at) VALUES (?, ?, ?, ?)",
+                 (client_id, slot, ",".join(str(r["id"]) for _, r in items), stamp))
+    conn.commit()
+    return f"alert sent for {slot}: " + ", ".join(f"{r['company']} ({s})" for s, r in items)
+#--------------------------------------------------------------#
+
 # Every 30 minutes (cron): replies, approvals, one send, sheet update
 def run_outreach(client: str) -> None:
     cfg = load_config(client)
     settings = _settings(cfg)
-    sync_tab(client)                                 # your approvals and edits first
+    sync_tab(client)                                 # your approvals, edits and ticks first
     conn = get_conn()
     client_id = get_client_id(conn, client)
+    if settings["mode"] == "manual":                 # alerts only: you send from your own mailbox
+        result = run_alerts(client, cfg, settings, conn, client_id)
+        conn.close()
+        print(f"[{client}] outreach (manual) {datetime.now():%Y-%m-%d %H:%M}: {result}")
+        if result.startswith("alert sent"):
+            sync_tab(client)
+            sync(client)
+        return
     replies = check_replies(client, conn, client_id)
     result = send_next(client, cfg, settings, conn, client_id)
     stats = {r["status"]: r["n"] for r in conn.execute(
@@ -467,6 +603,10 @@ def send_test(client: str, to: str) -> None:
     settings = _settings(cfg)
     conn = get_conn()
     client_id = get_client_id(conn, client)
+    if settings["mode"] == "manual":                 # manual mode: preview an alert, nothing is marked
+        print(f"[{client}] {run_alerts(client, cfg, settings, conn, client_id, test=True)}")
+        conn.close()
+        return
     row = conn.execute("SELECT * FROM outreach WHERE client_id = ? ORDER BY id DESC LIMIT 1", (client_id,)).fetchone()
     conn.close()
     subject = f"[TEST] {row['subject']}" if row else "[TEST] outreach setup"
