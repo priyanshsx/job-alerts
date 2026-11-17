@@ -6,8 +6,9 @@
 #          Leads tab, "Find contact" ticked  -> find the company's domain, the most relevant
 #                                               person, and their email
 #          People tab, "Find email" ticked   -> find that person's email
-#          Manual Lookup tab, pasted links      -> find the person and their email, add them to the
-#                                               People tab at row 2, then clear the link
+#          Manual Lookup tab, links / domains   -> a lead each in the Leads tab (see manual_lookup.py)
+#          Lead emails come from the enrich crawler first (website evidence + MillionVerifier);
+#          Apollo, Prospeo and Hunter are only tried after it, and only if their monthly_limit > 0.
 #          Syncs before (to read the ticks) and after (to show the results). Nothing is
 #          ever looked up twice, so re-running is safe.
 #--------------------------------------------------------------#
@@ -25,7 +26,7 @@ from job_alerts.core.names import normalize_name
 from job_alerts.emails import apollo, hunter, prospeo
 from job_alerts.emails import patterns
 from job_alerts.emails.base import ProviderUnavailable
-from job_alerts import manual_lookup
+from job_alerts import enrich, manual_lookup
 from job_alerts.people_sync import people_sync
 from job_alerts.sources import web_search, xray_search
 from job_alerts.sources.xray_search import normalize_linkedin_url
@@ -147,7 +148,8 @@ def find_contact(cfg, client_id: int, lead, roles: list[str], max_searches: int)
 
 # Credits this client used this month per provider (from the lookup log). Each client's
 # monthly_limit is its own budget; the budgets of all clients should add up to the free tiers.
-SHARED_BUDGETS = {"pattern": ("pattern", "guess"), "guess": ("pattern", "guess")}   # both spend MillionVerifier credits
+SHARED_BUDGETS = {"pattern": ("pattern", "guess", "crawler"), "guess": ("pattern", "guess", "crawler"),
+                  "crawler": ("pattern", "guess", "crawler")}   # all spend MillionVerifier credits
 
 def credits_used(conn, provider: str, client_id: int) -> int:
     month = datetime.now(timezone.utc).strftime("%Y-%m")
@@ -244,36 +246,62 @@ def contacts(client: str) -> None:
                          ("reply via the post", _now(), lead["id"]))
             conn.commit()
             continue
-        domain = lead["domain"] or find_domain(conn, cfg, client_id, lead["company_name"], lead["country"])
-        if lead["contact_person_id"]:                # contact found on an earlier run: only the email is left
+        domain = lead["domain"]                      # the crawler finds it (free methods first)
+        if lead["contact_person_id"] or (lead["contact_source"] == "manual" and lead["contact_name"]):
+            # contact found on an earlier run or typed in Manual Lookup: only the email is left
             contact = {"linkedin_url": lead["contact_linkedin"], "full_name": lead["contact_name"],
                        "title": lead["contact_title"], "company_name": lead["company_name"]}
         else:
             roles = ([lead["contact_role"]] if lead["contact_role"] else []) + \
                     [r for r in roles_default if r != lead["contact_role"]]
             contact = find_contact(cfg, client_id, lead, roles, max_searches)
-        email, status, person_id = None, "not_found", lead["contact_person_id"]
-        if contact:
-            stats["contacts"] += 1
-            person_id = person_id or save_contact_person(conn, client_id, contact, lead)
-            conn.commit()
-            email, status, source = find_email(conn, client_id, {**contact, "id": person_id},
-                                               domain, providers, unavailable)
-            if email:
-                stats["lead_emails"] += 1
-            conn.execute("UPDATE people SET email = ?, email_status = ?, email_source = ?, "
-                         "email_checked_at = ? WHERE id = ?",
-                         (email, status, source, None if status == WAITING else _now(), person_id))
-            print(f"    contact: {contact['full_name']} ({contact['title']}), email: {email or status}")
-        else:
+        person_id = lead["contact_person_id"]
+        if not contact:
             print("    no suitable contact found")
-        conn.execute(
-            """UPDATE leads SET domain = ?, contact_person_id = ?, contact_name = ?, contact_title = ?,
-               contact_linkedin = ?, contact_email = ?, email_status = ?, contact_checked_at = ?
-               WHERE id = ?""",
-            (domain, person_id, contact and contact["full_name"], contact and contact["title"],
-             contact and contact["linkedin_url"], email, status if contact else "no contact found",
-             _now(), lead["id"]))
+            conn.execute("UPDATE leads SET domain = COALESCE(domain, ?), contact_checked_at = ?, "
+                         "email_status = COALESCE(email_status, 'no contact found') WHERE id = ?",
+                         (domain, _now(), lead["id"]))
+            conn.commit()
+            continue
+        stats["contacts"] += 1
+        if contact["linkedin_url"]:
+            person_id = person_id or save_contact_person(conn, client_id, contact, lead)
+        fields = {"contact_person_id": person_id, "contact_name": contact["full_name"],
+                  "contact_title": contact["title"], "contact_linkedin": contact["linkedin_url"],
+                  "contact_source": lead["contact_source"] if lead["contact_source"] == "manual" else "linkedin",
+                  "contact_checked_at": _now()}
+        if lead["contact_source"] == "website" and lead["contact_email"]:   # website person moves to 2nd place
+            fields.update(extra_name=lead["contact_name"], extra_title=lead["contact_title"],
+                          extra_email=lead["contact_email"], extra_email_status=lead["email_status"],
+                          contact_email=None, email_status=None, email_method=None, email_source=None)
+        if lead["contact_person_id"] != person_id or lead["contact_source"] == "website":
+            fields.update(enrich_next_at=None, enrich_attempts=0)
+        if domain and not lead["domain"]:
+            fields["domain"] = domain
+        conn.execute(f"UPDATE leads SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?",
+                     (*fields.values(), lead["id"]))
+        conn.commit()
+
+        # The crawler first (free evidence + MillionVerifier), then paid providers if switched on
+        print(f"    crawler: {enrich.enrich_lead(conn, cfg, client_id, lead['id'])}")
+        lead = conn.execute("SELECT * FROM leads WHERE id = ?", (lead["id"],)).fetchone()
+        email, status, source = lead["contact_email"], lead["email_status"], lead["email_method"]
+        if status not in enrich.FOUND:
+            paid = [p for p in providers if p["name"] not in ("pattern", "guess")]
+            email, status, source = find_email(conn, client_id, {**contact, "id": person_id},
+                                               lead["domain"] if lead["domain_status"] != "uncertain" else None,
+                                               paid, unavailable)
+            if email:
+                conn.execute("UPDATE leads SET contact_email = ?, email_status = ?, email_method = ?, "
+                             "email_source = NULL WHERE id = ?", (email, status, source, lead["id"]))
+            elif not lead["contact_email"]:
+                status = lead["email_status"] or status
+        if email:
+            stats["lead_emails"] += 1
+        conn.execute("UPDATE people SET email = ?, email_status = ?, email_source = ?, "
+                     "email_checked_at = ? WHERE id = ?",
+                     (email, status, source, None if status == WAITING else _now(), person_id))
+        print(f"    contact: {contact['full_name']} ({contact['title']}), email: {email or status}")
         conn.commit()
     #--------------------------------------------------------------#
 
@@ -297,9 +325,10 @@ def contacts(client: str) -> None:
         print(f"    email: {email or status}")
     #--------------------------------------------------------------#
 
-    # 3. Links pasted in the Manual Lookup tab
-    lookup_ids = manual_lookup.run_lookups(conn, cfg, client_id, find_domain, find_email, providers,
-                                           unavailable, WAITING)
+    # 3. Rows in the Manual Lookup tab: leads, enriched straight away
+    lookup_ids = manual_lookup.run_lookups(conn, cfg, client_id)
+    for lead_id in lookup_ids:
+        print(f"    lookup lead {lead_id}: {enrich.enrich_lead(conn, cfg, client_id, lead_id)}")
     #--------------------------------------------------------------#
 
     # Summary and credit warnings
@@ -315,20 +344,20 @@ def contacts(client: str) -> None:
         print(f"    {p['name']:<8} {used} used, {left} left this month{flag}{state}")
     conn.close()
 
-    sync(client)                                     # show the results in the sheet
-    people_sync(client, to_top=lookup_ids)
+    sync(client, to_top=sorted(enrich.NEW_EMAILS))   # show the results; new emails at row 2
+    people_sync(client)
 #--------------------------------------------------------------#
 
-# Only the Manual Lookup tab (quicker than the full contacts command)
+# Only the Manual Lookup tab (quicker than the full contacts command; the crawler also does this every 10 min)
 def lookup(client: str) -> None:
-    people_sync(client)                              # read your latest Status / Note / ticks first
     cfg = load_config(client)
-    providers = (getattr(cfg, "contacts", None) or {}).get("email_providers", [])
     conn = get_conn()
     client_id = get_client_id(conn, client)
-    ids = manual_lookup.run_lookups(conn, cfg, client_id, find_domain, find_email, providers, set(), WAITING)
+    ids = manual_lookup.run_lookups(conn, cfg, client_id)
+    for lead_id in ids:
+        print(f"    lead {lead_id}: {enrich.enrich_lead(conn, cfg, client_id, lead_id)}")
     conn.close()
     print(f"[{client}] manual lookups: {len(ids)}")
-    people_sync(client, to_top=ids)
+    sync(client, to_top=sorted(enrich.NEW_EMAILS))
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#

@@ -214,7 +214,7 @@ def draft_outreach(client: str) -> None:
     for lead in leads:
         email = (lead["contact_email"] or "").strip().lower()
         if not email:
-            status = "needs an email: tick Find contact and run contacts"
+            status = "needs an email: type the contact name in this row, then run enrich"
         elif lead["email_status"] != "verified" and not settings["send_to_risky"]:
             status = f"email not verified ({lead['email_status']}): not sent"
         elif _blocked(conn, email):

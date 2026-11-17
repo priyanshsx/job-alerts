@@ -17,6 +17,7 @@ from job_alerts.people_sync import people_sync
 from job_alerts.contacts import contacts, lookup
 from job_alerts.outreach import draft_outreach, run_outreach, send_test, report
 from job_alerts.costs import write_costs
+from job_alerts import enrich
 #--------------------------------------------------------------#
 
 def main():
@@ -36,7 +37,7 @@ def main():
         ("people-digest", "build and send the weekly people email"),
         ("people-sync", "two-way sync between people and the People tab"),
         ("contacts", "find contacts and emails for leads and people ticked in the sheet"),
-        ("lookup", "find emails for the LinkedIn links pasted in the Manual Lookup tab"),
+        ("lookup", "turn the Manual Lookup tab (links and/or domains) into leads and find their emails"),
         ("outreach-draft", "draft emails for leads ticked Reach out (Outreach tab)"),
         ("outreach", "read replies, then send at most one approved email (run from cron)"),
         ("outreach-test", "send the newest draft to yourself to test the mailbox"),
@@ -51,7 +52,15 @@ def main():
         if name == "outreach-test":
             cmd.add_argument("--to", required=True, help="your own address")
 
+    cmd = sub.add_parser("enrich", help="crawler: domains and emails for leads (all clients; run from cron)")
+    cmd.add_argument("--client", help="one client only (default: all clients with a sheet)")
+    cmd.add_argument("--all", action="store_true", help="all clients (the default)")
+    cmd.add_argument("--minutes", type=float, default=8, help="stop taking new leads after this long")
+
     args = parser.parse_args()
+    if args.command == "enrich":
+        enrich.run([args.client] if args.client else None, minutes=args.minutes)
+        return
     usage.set_context(args.client, args.command)       # search costs are logged per client and command
 
     if args.command == "fetch":

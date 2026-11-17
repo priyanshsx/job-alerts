@@ -175,6 +175,39 @@ On macOS or Linux, add a cron job (`crontab -e`):
 
 Cron only runs while the machine is awake; for guaranteed daily runs, move it to a small server or a scheduled CI job.
 
+## Enrichment crawler (domains and emails, all clients, 24/7)
+
+`python3 -m job_alerts enrich` runs every 10 minutes from cron and works through the leads of every
+client with a sheet (switch one off with `enrich: {enabled: false}` in its config).
+
+For each lead it:
+1. finds the company domain, free methods first: the job link, websites/emails in the job text, the
+   company link on ATS pages, then name + country endings checked in DNS. Only if all fail: one Unoblox
+   search (`find_domain`). A domain is used only if the website carries the company name; otherwise the
+   Leads tab shows `firma.de (uncertain)` and no email is written.
+2. reads up to 15 public pages (Impressum, contact, team/about, press, careers), following robots.txt,
+   1.5 s between requests. Saves every address seen, with its page (`site_emails`).
+3. builds the email for the lead's contact: found on the site > the company's format > common formats.
+   Plus a second person from the website (target role or managing director), shown after `; `.
+4. checks every address with MillionVerifier (cached: never paid twice; budget = `pattern` monthly_limit).
+   On a catch-all domain only evidence-backed addresses are kept.
+5. updates the Leads tab: Domain, Contact email, Email status, Email method, Email source.
+
+No email yet? It tries again after 1, 3, 7 and 30 days, then monthly. Apollo, Prospeo and Hunter are never
+used by the crawler (their monthly_limit is 0 in every config).
+
+Manual Lookup tab: column A a LinkedIn profile link, column B a domain (either or both). The crawler turns
+each row into a lead within 10 minutes (or run `lookup --client <name>` for now). Typing a domain in the
+Leads tab's Domain column also wins over the crawler's own.
+
+Setup (once): `sqlite3 data/job_alerts.db < db/migrations/016_enrichment.sql`, then add to `crontab -e`:
+
+```
+*/10 * * * * cd /path/to/job-alerts-repo && .venv/bin/python -m job_alerts enrich >> data/enrich.log 2>&1
+```
+
+Keep the Mac awake while plugged in (Battery settings: prevent automatic sleeping when the display is off).
+
 ## Cost
 
 With a mid-sized model, classifying one posting costs about ₹0.28 (roughly 800 input and 120 output tokens). A first run of around 150 postings costs about ₹40; a normal day with 20–50 new postings costs ₹6–14, or roughly ₹300 a month per client. The job source is free.

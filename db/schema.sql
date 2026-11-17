@@ -184,6 +184,18 @@ CREATE TABLE IF NOT EXISTS leads (
     request_id INTEGER,
     reach_out INTEGER DEFAULT 0,
     outreach_status TEXT,
+    domain_status TEXT,
+    domain_source TEXT,
+    contact_source TEXT,
+    email_source TEXT,
+    email_method TEXT,
+    extra_name TEXT,
+    extra_title TEXT,
+    extra_email TEXT,
+    extra_email_status TEXT,
+    enrich_attempts INTEGER DEFAULT 0,
+    enrich_next_at TEXT,
+    enriched_at TEXT,
     UNIQUE (client_id, name_normalized)
 );
 
@@ -316,4 +328,37 @@ CREATE TABLE IF NOT EXISTS outreach_alerts (
     items TEXT,                 -- outreach ids in the alert
     sent_at TEXT,
     UNIQUE (client_id, slot)
+);
+
+-- 016: enrichment crawler
+-- One row per website crawled (shared by all clients: it's about the company)
+CREATE TABLE IF NOT EXISTS site_crawls (
+  domain TEXT PRIMARY KEY,
+  home_url TEXT,               -- where the site really lives after redirects
+  pages INTEGER DEFAULT 0,
+  emails_found INTEGER DEFAULT 0,
+  people TEXT,                 -- JSON: named people seen on the site (name, role, source_url)
+  status TEXT,                 -- ok, unreachable, blocked
+  crawled_at TEXT
+);
+
+-- Every email address seen on a public page, with where it was seen (GDPR: source recorded)
+CREATE TABLE IF NOT EXISTS site_emails (
+  id INTEGER PRIMARY KEY,
+  domain TEXT,                 -- the website it was found on
+  email TEXT,
+  name TEXT,                   -- the person's name next to it, only when the address matches the name
+  email_format TEXT,           -- e.g. first.last (when a name matched)
+  is_generic INTEGER DEFAULT 0,-- info@, sales@, jobs@ ...
+  source_url TEXT,
+  found_at TEXT,
+  UNIQUE (domain, email)
+);
+
+-- MillionVerifier answers, so no address is ever paid for twice (shared by all clients)
+CREATE TABLE IF NOT EXISTS email_verifications (
+  email TEXT PRIMARY KEY,
+  status TEXT,                 -- verified, catch_all, invalid, unknown, error
+  detail TEXT,
+  checked_at TEXT
 );
