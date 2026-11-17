@@ -169,6 +169,8 @@ def _refresh_lead(conn, row) -> None:
 # Write one draft for one lead
 def _draft(cfg, settings: dict, client_id: int, lead) -> tuple[Draft, str]:
     name = (lead["contact_name"] or "").strip()
+    if name and " " not in name and ("-" in name or name.islower()):   # a LinkedIn handle, e.g. "john-iwuozor"
+        name = " ".join(w.capitalize() for w in name.split("-") if w.isalpha())
     signal = lead["latest_signal"] or ""
     kind = "request" if signal.lower().startswith("asked for help") else "lead"
     prompt = DRAFT_PROMPT.format(
