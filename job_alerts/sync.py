@@ -28,6 +28,7 @@ ENGINE_COLUMNS = {                 # filled by the engine; the team should not e
     "Contact LinkedIn": "contact_linkedin",
     "Contact email": "contact_email",
     "Email status": "email_status",
+    "Outreach": "outreach_status",         # filled by outreach-draft / outreach
 }
 TEAM_COLUMNS = {                   # edited by the team; the engine only reads these
     "Status": "status",
@@ -37,6 +38,7 @@ TEAM_COLUMNS = {                   # edited by the team; the engine only reads t
     "Notes": "notes",
     "Last updated": "last_updated",
     "Find contact": "find_contact",        # Monday tick: find a contact and email for this lead
+    "Reach out": "reach_out",              # Monday tick: draft an outreach email for this lead
 }
 ALL_HEADERS = list(ENGINE_COLUMNS) + list(TEAM_COLUMNS)
 #--------------------------------------------------------------#
@@ -98,12 +100,13 @@ def sync(client: str) -> None:
     for lead_id, (_, row) in in_sheet.items():
         conn.execute(
             """UPDATE leads SET status = ?, owner = ?, next_step = ?, next_step_date = ?,
-               notes = ?, last_updated = ?, find_contact = ?
+               notes = ?, last_updated = ?, find_contact = ?, reach_out = ?
                WHERE id = ? AND client_id = ?""",
             (cell(row, "Status") or "new", cell(row, "Owner") or None,
              cell(row, "Next step") or None, cell(row, "Next step date") or None,
              cell(row, "Notes") or None, cell(row, "Last updated") or None,
              int(cell(row, "Find contact").upper() in ("TRUE", "YES", "1", "X")),
+             int(cell(row, "Reach out").upper() in ("TRUE", "YES", "1", "X")),
              lead_id, client_id),
         )
     conn.commit()

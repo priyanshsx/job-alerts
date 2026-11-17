@@ -15,6 +15,7 @@ from job_alerts.people import find_people
 from job_alerts.people_digest import send_people_digest
 from job_alerts.people_sync import people_sync
 from job_alerts.contacts import contacts, lookup
+from job_alerts.outreach import draft_outreach, run_outreach, send_test, report
 from job_alerts.costs import write_costs
 #--------------------------------------------------------------#
 
@@ -36,6 +37,10 @@ def main():
         ("people-sync", "two-way sync between people and the People tab"),
         ("contacts", "find contacts and emails for leads and people ticked in the sheet"),
         ("lookup", "find emails for the LinkedIn links pasted in the Manual Lookup tab"),
+        ("outreach-draft", "draft emails for leads ticked Reach out (Outreach tab)"),
+        ("outreach", "read replies, then send at most one approved email (run from cron)"),
+        ("outreach-test", "send the newest draft to yourself to test the mailbox"),
+        ("outreach-report", "replies per email type"),
         ("costs", "update the Costs tab (spend per week and month, cost per lead)"),
         ("people-run", "find people, send the weekly email, then sync the People tab")
     ]:
@@ -43,6 +48,8 @@ def main():
         cmd.add_argument("--client", required=True)
         if name in ("digest", "people-digest"):
             cmd.add_argument("--dry-run", action="store_true", help="save the HTML without sending")
+        if name == "outreach-test":
+            cmd.add_argument("--to", required=True, help="your own address")
 
     args = parser.parse_args()
     usage.set_context(args.client, args.command)       # search costs are logged per client and command
@@ -79,6 +86,14 @@ def main():
         contacts(args.client)
     elif args.command == "lookup":
         lookup(args.client)
+    elif args.command == "outreach-draft":
+        draft_outreach(args.client)
+    elif args.command == "outreach":
+        run_outreach(args.client)
+    elif args.command == "outreach-test":
+        send_test(args.client, args.to)
+    elif args.command == "outreach-report":
+        report(args.client)
     elif args.command == "people-run":
         find_people(args.client)
         send_people_digest(args.client)
