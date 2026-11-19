@@ -30,7 +30,7 @@ from job_alerts.crawler import domains, finder, site
 # Global variables
 BACKOFF_DAYS = [1, 3, 7, 30]               # after that: every 30 days
 DONE = "9999-12-31"                        # enrich_next_at for a finished lead
-FOUND = ("verified", "catch-all")
+FOUND = ("verified", "catch-all", "catch-all (guess)")
 SKIP_STATUSES = {"rejected", "not a fit", "not relevant", "lost", "closed", "do not contact", "dnc", "no fit"}
 LOCK_FILE = ROOT / "data" / "enrich.lock"
 NEW_EMAILS: set[int] = set()               # leads that got a new email in this run (moved to row 2 on sync)
@@ -145,6 +145,8 @@ def enrich_lead(conn, cfg, client_id: int, lead_id: int, verifier: finder.Verifi
         person, second = None, None
         others = [p for p in site.ranked_people(info["people"], roles) if not has_contact or
                   normalize_name(p["name"]) != normalize_name(lead["contact_name"])]
+        if lead["contact_source"] == "manual" or "manual_lookup" in (lead["sources"] or ""):
+            others = []                              # you named the person: no extra website guesses
         for candidate in others[:SITE_PEOPLE_TRIED]:
             own = next((e for e in info["emails"] if e["name"] and
                         normalize_name(e["name"]) == normalize_name(candidate["name"])), None)

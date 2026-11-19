@@ -257,9 +257,14 @@ def crawl(conn, domain: str, roles: list[str]) -> dict:
         for name, role, kind in found_people:
             if all(p["name"] != name for p in people):
                 people.append({"name": name, "role": role, "kind": kind, "source_url": page["url"]})
-    for e in emails.values():                        # a named address is a person too
-        if e["name"] and all(p["name"] != e["name"] for p in people):
+    for e in emails.values():                        # a named address is a person too (and proves the name)
+        if not e["name"]:
+            continue
+        match = next((p for p in people if p["name"] == e["name"]), None)
+        if match is None:
             people.append({"name": e["name"], "role": None, "kind": "email", "source_url": e["source_url"]})
+        elif match["kind"] == "role":
+            match["kind"] = "email"
 
     _save(conn, domain, home["url"], len(pages), list(emails.values()), people, "ok")
     return {"status": "ok", "home_url": home["url"], "emails": list(emails.values()), "people": people,
@@ -289,16 +294,17 @@ def _load(conn, domain, row) -> dict:
             "people": json.loads(row["people"] or "[]"), "text": "", "pages": row["pages"]}
 #--------------------------------------------------------------#
 
-# People on the site worth an email, best first: target roles, then legal representatives
+# People on the site worth an email, best first: target roles, then legal representatives.
+# Only people we can trust are real: legal representatives (Impressum) and names matched to an
+# email address. Names picked up next to a role word were too noisy ("Native Startups Actually").
 def ranked_people(people: list[dict], roles: list[str]) -> list[dict]:
+    people = [p for p in people if p.get("kind") in ("legal", "email")]
     def rank(p):
         role = (p.get("role") or "").lower()
         for i, r in enumerate(roles):
             if role and (r.lower() in role or role in r.lower()):
                 return i
-        if p["kind"] == "legal" or any(g in role for g in GENERIC_ROLES):
-            return len(roles) + 1
-        return None
+        return len(roles) + 1 if p["kind"] == "legal" else len(roles) + 2
     ranked = sorted((rank(p), i) for i, p in enumerate(people)
                     if rank(p) is not None and all(split_name(p["name"])))
     return [people[i] for _, i in ranked]

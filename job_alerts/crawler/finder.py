@@ -8,7 +8,8 @@
 #            common format    the usual formats, only when nothing is known (up to 3 checks)
 #          Every address is checked with MillionVerifier before it reaches the sheet. Answers are
 #          cached in email_verifications, so no address is ever paid for twice. On a catch-all
-#          domain only evidence-backed addresses are kept ("catch-all"); bare guesses are dropped.
+#          domain an evidence-backed address is "catch-all"; a bare guess is kept as "catch-all (guess)"
+#          (not verified: outreach skips it unless send_to_risky is on).
 #          Checks are logged in email_lookups as provider "crawler" and use the client's
 #          MillionVerifier budget (contacts.email_providers -> pattern -> monthly_limit).
 #--------------------------------------------------------------#
@@ -25,6 +26,7 @@ from job_alerts.emails.base import split_name
 # Global variables
 CACHE_DAYS = 90
 MAX_COMMON_GUESSES = int(os.getenv("EMAIL_MAX_GUESSES") or 3)
+COMMON_ORDER = ["first", "first.last", "f.last", "flast"]   # first@ first, for every company
 #--------------------------------------------------------------#
 
 class OutOfCredits(Exception):
@@ -103,8 +105,11 @@ def find(conn, verifier: Verifier, name: str, domain: str, emails: list[dict], p
          common: int = MAX_COMMON_GUESSES, own_email: str | None = None, own_source: str | None = None) -> dict:
     none = {"email": None, "status": "unresolved", "method": None, "source": None}
     first, last = split_name(name)
-    if not first or not last:
-        return {**none, "status": "unresolved (needs first and last name)"}
+    if not first:
+        return {**none, "status": "unresolved (needs a name)"}
+    initial_only = not last or len(last.strip(".")) <= 1      # "Setareh M." -> only first@ can be built
+    if initial_only:
+        name = first
     if patterns.mx_provider(domain) == "none":
         return {**none, "status": "no mail server"}
 
@@ -112,16 +117,21 @@ def find(conn, verifier: Verifier, name: str, domain: str, emails: list[dict], p
     cands = []
     if own_email:
         cands.append((own_email, "found on site", own_source))
+    if initial_only:                                 # with only an initial, first@ is the one sensible guess
+        cands += [(f"{v}@{domain}", "common format", None) for v in patterns._variants(first)[:1]]
+        emails = []
     for e in emails:
         if e["email"].endswith("@" + domain) and not e["is_generic"] and patterns.detect_format(name, e["email"]) \
                 and patterns.detect_format(name, e["email"]) not in ("first", "last"):
             cands.append((e["email"], "found on site", e["source_url"]))
-    fmt, fmt_source = known_format(conn, domain, emails)
-    if fmt:
+    fmt, fmt_source = known_format(conn, domain, emails) if not initial_only else (None, None)
+    if initial_only:
+        pass
+    elif fmt:
         cands += [(c, "company format", fmt_source) for c in patterns.candidates(name, domain, [fmt])[:2]]
     elif common:
         cands += [(c, "common format", None) for c in
-                  patterns.candidates(name, domain, ["first.last", "f.last", "flast", "first"])[:common]]
+                  patterns.candidates(name, domain, COMMON_ORDER)[:common]]
     seen, unique = set(), []
     for c in cands:
         if c[0] not in seen:
@@ -134,8 +144,8 @@ def find(conn, verifier: Verifier, name: str, domain: str, emails: list[dict], p
     row = conn.execute("SELECT catch_all FROM email_domains WHERE domain = ?", (domain,)).fetchone()
     if row and row["catch_all"]:
         email, method, source = unique[0]
-        if method == "common format":
-            return {**none, "status": "unresolved (catch-all, format unknown)"}
+        if method == "common format":                # can't be confirmed: keep the best guess, marked as such
+            return {"email": email, "status": "catch-all (guess)", "method": method, "source": None}
         return {"email": email, "status": "catch-all", "method": method, "source": source}
 
     for email, method, source in unique:
@@ -146,8 +156,11 @@ def find(conn, verifier: Verifier, name: str, domain: str, emails: list[dict], p
         if status == "catch_all":
             patterns._save_domain(domain, catch_all=1)
             if method == "common format":
-                return {**none, "status": "unresolved (catch-all, format unknown)"}
+                best = unique[0]                     # the first guess (first@) is the best one
+                return {"email": best[0], "status": "catch-all (guess)", "method": best[1], "source": None}
             return {"email": email, "status": "catch-all", "method": method, "source": source}
+    if initial_only:
+        return {**none, "status": "unresolved (add the full last name)"}
     return none
 #--------------------------------------------------------------#
 #---------------------end-of-code------------------------------#
