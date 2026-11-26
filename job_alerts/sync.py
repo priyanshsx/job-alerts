@@ -95,11 +95,13 @@ def _ensure_headers(ws, values: list[list[str]], hidden: set[str] = frozenset())
 
 # Two-way sync between the leads table and the client's Google Sheet.
 # to_top: lead ids moved to row 2 (e.g. a new email was just found), keeping every cell of their row.
-def sync(client: str, to_top: list[int] | None = None) -> None:
+def sync(client: str, to_top: list[int] | None = None, force: bool = False) -> None:
     cfg = load_config(client)
     sheets_cfg = getattr(cfg, "sheets", None)
     if not sheets_cfg or not sheets_cfg.get("spreadsheet_id"):
         print(f"[{client}] no sheets.spreadsheet_id in config, skipping sync")
+        return
+    if sheets_cfg.get("enabled", True) is False and not force:   # the console replaced the sheet
         return
 
     ws = open_worksheet(sheets_cfg["spreadsheet_id"], sheets_cfg.get("worksheet", "Leads"))

@@ -12,6 +12,9 @@ job_alerts/digest.py
 job_alerts/enrich.py
 job_alerts/hiring_leads.py
 job_alerts/leads.py
+job_alerts/manual_lookup.py
+job_alerts/outreach.py
+job_alerts/outreach_mail.py
 job_alerts/people.py
 job_alerts/people_digest.py
 job_alerts/people_sync.py

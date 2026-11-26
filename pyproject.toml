@@ -8,5 +8,8 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = ["python-dotenv", "pyyaml", "pydantic", "httpx", "openai", "gspread", "google-auth", "openpyxl", "pandas"]
 
+[project.optional-dependencies]
+console = ["streamlit>=1.50"]
+
 [tool.setuptools.packages.find]
 include = ["job_alerts"]

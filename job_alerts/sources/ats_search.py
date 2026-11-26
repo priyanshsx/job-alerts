@@ -43,7 +43,9 @@ MARKET_HINTS = {
     "AT": ["austria", "österreich", "vienna", "wien", "graz", "linz"],
     "CH": ["switzerland", "schweiz", "zurich", "zürich", "basel", "geneva", "bern"],
     "US": ["united states", "new york", "san francisco", "austin", "boston", "seattle",
-           "los angeles", "chicago", " usa", ", ny", ", ca"],
+           "los angeles", "chicago", " usa", ", ny", ", ca", "detroit", "atlanta", "houston", "dallas",
+           "charlotte", "cincinnati", "milwaukee", "columbus", "cleveland", "minneapolis", "philadelphia",
+           "pittsburgh", "indianapolis", "nashville", ", mi", ", oh", ", il", ", tx", ", ga", ", nc", ", wi"],
 }
 #--------------------------------------------------------------#
 

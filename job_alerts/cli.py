@@ -18,6 +18,7 @@ from job_alerts.contacts import contacts, lookup
 from job_alerts.outreach import draft_outreach, run_outreach, send_test, report
 from job_alerts.costs import write_costs
 from job_alerts import enrich
+from job_alerts.research import run as research
 #--------------------------------------------------------------#
 
 def main():
@@ -57,7 +58,17 @@ def main():
     cmd.add_argument("--all", action="store_true", help="all clients (the default)")
     cmd.add_argument("--minutes", type=float, default=8, help="stop taking new leads after this long")
 
+    cmd = sub.add_parser("research", help="research notes: recent company updates for leads with an email")
+    cmd.add_argument("--client", required=True)
+    cmd.add_argument("--lead", type=int, help="one lead only, even if it isn't due")
+    cmd.add_argument("--minutes", type=float, default=8, help="stop taking new leads after this long")
+    cmd.add_argument("--rematch", action="store_true", help="re-apply the keywords to pages already read")
+
     args = parser.parse_args()
+    if args.command == "research":
+        usage.set_context(args.client, "research")
+        research.run(args.client, lead_id=args.lead, minutes=args.minutes, rematch=args.rematch)
+        return
     if args.command == "enrich":
         enrich.run([args.client] if args.client else None, minutes=args.minutes)
         return

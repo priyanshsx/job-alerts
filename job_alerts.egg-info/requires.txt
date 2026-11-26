@@ -7,3 +7,6 @@ gspread
 google-auth
 openpyxl
 pandas
+
+[console]
+streamlit>=1.50

@@ -69,11 +69,13 @@ def _ensure_headers(ws, values: list[list[str]]) -> list[str]:
 #--------------------------------------------------------------#
 
 # Two-way sync for one client's People tab
-def people_sync(client: str, to_top: list[int] | None = None) -> None:
+def people_sync(client: str, to_top: list[int] | None = None, force: bool = False) -> None:
     cfg = load_config(client)
     sheets_cfg = getattr(cfg, "sheets", None)
     if not sheets_cfg or not sheets_cfg.get("spreadsheet_id"):
         print(f"[{client}] no sheets.spreadsheet_id in config, skipping people sync")
+        return
+    if sheets_cfg.get("enabled", True) is False and not force:   # the console replaced the sheet
         return
 
     tab = sheets_cfg.get("people_tab", "People")

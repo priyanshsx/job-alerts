@@ -14,3 +14,4 @@ __pycache__/
 .DS_Store
 
 outreach.log
+.streamlit/secrets.toml

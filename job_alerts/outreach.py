@@ -193,7 +193,8 @@ def _draft(cfg, settings: dict, client_id: int, lead) -> tuple[Draft, str]:
         sender=settings.get("sender_name", cfg.display_name),
         recipient=name or f"the team at {lead['company_name']}",
         title=f", {lead['contact_title']}" if lead["contact_title"] else "",
-        company=lead["company_name"], signal=signal, guidance=KIND_GUIDANCE[kind],
+        company=lead["company_name"], signal=signal,
+        guidance=(settings.get("guidance") or {}).get(kind) or KIND_GUIDANCE[kind],   # a client may override
         offer_line=" ".join(settings.get("offer_line", cfg.offer).split()),
         proof_points="\n".join(f"- {p}" for p in settings.get("proof_points", [])),
         voice_sample=settings.get("voice_sample", "").strip(),
@@ -203,9 +204,12 @@ def _draft(cfg, settings: dict, client_id: int, lead) -> tuple[Draft, str]:
 
 # Monday: drafts for leads ticked "Reach out"
 def draft_outreach(client: str) -> None:
-    sync(client)                                     # read the "Reach out" ticks
     cfg = load_config(client)
     settings = _settings(cfg)
+    if not settings.get("enabled", True):            # outreach.enabled: false in the client's config
+        print(f"[{client}] outreach is switched off in the config: no drafts written")
+        return
+    sync(client)                                     # read the "Reach out" ticks
     conn = get_conn()
     client_id = get_client_id(conn, client)
     leads = conn.execute("SELECT * FROM leads WHERE client_id = ? AND reach_out = 1 AND id NOT IN "
@@ -574,6 +578,8 @@ def run_alerts(client: str, cfg, settings: dict, conn, client_id: int, test: boo
 def run_outreach(client: str) -> None:
     cfg = load_config(client)
     settings = _settings(cfg)
+    if not settings.get("enabled", True):            # outreach.enabled: false: no alerts, no sending
+        return
     sync_tab(client)                                 # your approvals, edits and ticks first
     conn = get_conn()
     client_id = get_client_id(conn, client)

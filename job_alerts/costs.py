@@ -136,6 +136,8 @@ def write_costs(client: str) -> None:
     if not sheets_cfg.get("spreadsheet_id"):
         print(f"[{client}] no sheets.spreadsheet_id in config, skipping costs")
         return
+    if sheets_cfg.get("enabled", True) is False:       # the console shows costs instead
+        return
     usd_inr, eur_inr = _fx()
     conn = get_conn()
     client_id = get_client_id(conn, client)

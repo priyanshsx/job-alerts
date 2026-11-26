@@ -1,0 +1,33 @@
+# Settings for the internal console (streamlit run console/app.py)
+# Only the clients listed here are ever read: the console shows nothing about any other client.
+
+brand: Vizcorn
+clients: [vizcorn, vizcorn_india]       # job-alerts clients shown together as one company
+suggester_client: vizcorn               # content-suggester client for the Engage page
+
+# Markets: country codes as the leads table stores them
+markets:
+  DACH: [DE, AT, CH]
+  EU: [NL, ES, PL, FR, IT, BE, LU, CZ, SK, HU, RO, PT, IE, DK, SE, FI, NO, GB, UK]
+  US: [US]
+  IN: [IN]
+  APAC: [SG, AU, NZ, JP, KR, MY, TH, VN, ID, PH, HK, CN, TW]
+
+# Follow-up reminders after the first cold email (no reply yet):
+follow_ups:
+  first_after_days: 7                   # follow-up 1: 7 days after the first email
+  second_after_days: 5                  # follow-up 2: 5 days after follow-up 1
+  check_in_after_days: 25               # after all 3 emails: a check-in 25 days after the last one (and again after each check-in)
+
+# Before importing the sheet, pull the team's columns into the database
+import:
+  sync: [vizcorn, vizcorn_india]
+  people_sync: [vizcorn]
+
+# Credits left: what you had on the "since" date; the console subtracts what was used after it.
+# Update these when you top up.
+credits:
+  serper:          {total: 2500, since: "2026-11-01", label: Google searches (Serper)}
+  millionverifier: {total: 100,  since: "2026-11-01", label: Email checks (MillionVerifier), resets_monthly: true}
+  llm_inr:         {total: 5000, since: "2026-11-01", label: AI balance (INR)}
+  search_usd:      {total: 20,   since: "2026-11-01", label: People search (USD)}

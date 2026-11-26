@@ -1,0 +1,23 @@
+# Console look: the mockup's colours (light page, dark sidebar, teal accent, Inter)
+# Streamlit reads this when you start it from the repo folder.
+
+[theme]
+base = "light"
+primaryColor = "#0b5d63"
+backgroundColor = "#f4f5f7"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#16181d"
+linkColor = "#0b5d63"
+borderColor = "#e3e6ea"
+showWidgetBorder = true
+baseRadius = "10px"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+chartCategoricalColors = ["#0b5d63", "#5b9aa0", "#b45309", "#9aa3ae", "#1f4e8c"]
+
+[theme.sidebar]
+backgroundColor = "#16181d"
+secondaryBackgroundColor = "#2a2f39"
+textColor = "#c9ced6"
+primaryColor = "#5fb3b9"
+borderColor = "#2a2f39"
